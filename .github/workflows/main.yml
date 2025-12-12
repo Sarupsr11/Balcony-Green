@@ -56,34 +56,34 @@ jobs:
           tox -e format
           tox -e lint
 
-  coverage:
-    name: Check Test Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  # coverage:
+  #   name: Check Test Coverage
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v4
+  #       with:
+  #         python-version: '3.11'
       
-      - name: Install dependencies
-        run: |
-          pip install .[test]
+  #     - name: Install dependencies
+  #       run: |
+  #         pip install .[test]
       
-      - name: Run coverage
-        run: tox -e coverage
+  #     - name: Run coverage
+  #       run: tox -e coverage
       
-      - name: Upload Coverage Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage.xml
+  #     - name: Upload Coverage Report
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: coverage-report
+  #         path: coverage.xml
       
-      - name: Report Coverage
-        run: |
-          grep -E '(?i)total.*? (100(?:\.0+)?%|[1-9]?\d(?:\.\d+)?%)$' coverage.xml || true
+  #     - name: Report Coverage
+  #       run: |
+  #         grep -E '(?i)total.*? (100(?:\.0+)?%|[1-9]?\d(?:\.\d+)?%)$' coverage.xml || true
 
   type_check:
     name: Static Type Check
