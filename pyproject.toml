@@ -8,19 +8,17 @@ name = "balconygreen"
 readme = "README.md"
 license= "Apache-2.0"
 dependencies = [
+    "streamlit",
     "pydantic",
     "click",
     "fastapi[standard]",
     "requests",
-    "graphviz",
-    "rdflib",
     "typing",
-    "SPARQLWrapper",
     "pandas",
-    "numpy==1.26.4",
+    "numpy",
     "scikit-learn",
     "matplotlib",
-    "scipy",
+    "scipy"
 ]
 
 
