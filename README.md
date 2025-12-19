@@ -63,6 +63,12 @@
 ![Balcony Green Gantt Chart](image.png)
 
 
+## Run Streamlit
+
+streamlit run src/balconygreen/app.py
+
+
+
 
 
 
