@@ -9,16 +9,15 @@ readme = "README.md"
 license= "Apache-2.0"
 dependencies = [
     "streamlit",
-    "pydantic",
-    "click",
-    "fastapi[standard]",
     "requests",
-    "typing",
     "pandas",
     "numpy",
     "scikit-learn",
+    "torchvision",
     "matplotlib",
-    "scipy"
+    "timm",
+    "tqdm",
+    "torch"
 ]
 
 
@@ -62,7 +61,7 @@ test = [
 
 [tool.ruff]
 # Set the maximum line length to 79.
-line-length = 120
+line-length = 150
 
 [tool.ruff.lint]
 select = [

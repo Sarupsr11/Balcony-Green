@@ -168,5 +168,8 @@ cython_debug/
 # cache vcode files
 .vscode/
 
+# ruff files
+.ruff_cache/
+
 # cache dataset files
-disease-detection/
+disease-detection/Dataset
