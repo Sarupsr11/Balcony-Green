@@ -21,7 +21,7 @@ source venv/bin/activate
 echo "Installing dependencies..."
 pip install --upgrade pip
 # Install explicitly as pyproject.toml might be missing some
-pip install streamlit pydantic click fastapi requests pandas numpy scikit-learn matplotlib scipy torch torchvision timm pillow
+pip install streamlit pydantic click fastapi requests pandas numpy scikit-learn matplotlib scipy torch torchvision timm pillow streamlit-js-eval
 
 echo "✅ Setup Complete!"
 echo "To run the app:"

@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-01-24
 
 ### Added
+- **Geolocation Support**: Added `src/balconygreen/location_service.py` handling:
+    - **GPS**: Browser-based auto-location via `streamlit-js-eval`.
+    - **IP Geolocation**: Fallback using `ip-api.com`.
+    - **Geocoding**: Search for cities by name (Open-Meteo) and Reverse Geocoding (Nominatim).
 - **Weather Integration**: Added `src/balconygreen/weather_service.py` to fetch real-time weather data (Temperature, Humidity, Rain, Soil Moisture/Ground) using the Open-Meteo API.
 - **Location Settings**: Added a Sidebar in the Streamlit app to configure Latitude and Longitude.
 - **Documentation**: 
@@ -15,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - **Setup**: Added `setup.sh` for easy environment initialization.
 
 ### Changed
+- **Location Settings**: Enhanced Sidebar with "Manual", "Search City", and "Auto-Locate" modes with automatic name resolution.
 - **App Architecture (`src/balconygreen/app.py`)**:
     - Split sensor data processing into `WeatherReader` (API) and `HardwareSensorReader` (Mock/Local).
     - Redesigned "Live Monitoring" UI to display Ambient Weather and Plant Sensor data in separate columns.

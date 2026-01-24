@@ -1,38 +1,30 @@
-# Update Report: Weather & Architecture Overhaul
+# Update Report: Location Services Integration
 
 **Date:** January 24, 2026
-**Branch:** `feature/weather-integration` (New)
+**Branch:** `feature/location-integration` (New)
 
 ## Executive Summary
-We have successfully transitioned the application from a pure simulation to a hybrid system that consumes **real-world meteorological data**. The application architecture was refactored to distinguish between "Ambient Data" (Cloud APIs) and "Local Data" (Hardware/Sensors), paving the way for future IoT integration.
+This update introduces comprehensive Location Services to the Balcony Green application. Users no longer need to manually look up latitude and longitude coordinates. The app now supports automatic GPS detection, IP-based fallback, and city name searching, significantly improving the user experience (UX).
 
 ## Detailed Changes
 
-### 1. Real-Time Data Integration
-- **Module**: `src/balconygreen/weather_service.py`
-- **Source**: [Open-Meteo API](https://open-meteo.com/) (Free, No Auth).
-- **Functionality**:
-    - Fetches current Temperature (2m), Relative Humidity, Rain, and Soil Moisture (0-1cm).
-    - **Logic**: Converts raw API soil moisture ($m^3/m^3$) to percentage (%) for user readability.
-    - Includes robust error handling (timeouts, connection errors).
+### 1. New Service: `LocationService`
+- **File**: `src/balconygreen/location_service.py`
+- **Capabilities**:
+    - **IP Location**: Approximate location lookup using `ip-api.com` (useful when GPS is denied).
+    - **City Search**: Forward Geocoding using Open-Meteo Geocoding API (allows users to type "London" instead of coordinates).
+    - **Reverse Geocoding**: Converts raw Lat/Lon into human-readable addresses (e.g., "Mitte, Berlin") using OpenStreetMap Nominatim.
 
-### 2. UI/UX Improvements (`app.py`)
-- **Location Selector**: A new Sidebar configuration panel allows users to input their specific GPS coordinates (defaults to Berlin).
-- **Split Dashboard**:
-    - **Left Column (Ambient)**: Displays data from the Weather API. This represents the environment *outside* the pot.
-    - **Right Column (Sensors)**: Displays simulated data (Pot Moisture, Light, Battery). This represents the specific condition *of the plant*.
-- **Visuals**: Replaced raw JSON text dumps with clean `st.metric` components and progress bars.
+### 2. UI Enhancements (`app.py`)
+- **Location Sidebar**: Completely overhauled to support three modes:
+    1.  **Manual**: Traditional coordinate input.
+    2.  **Search City**: A search box with a dropdown of matching global cities.
+    3.  **Auto-Locate**: One-click button to fetch browser GPS.
+- **Dynamic Headers**: The "Ambient Weather" card now displays the actual name of the location being monitored (e.g., "Location: Paris, France") to provide context assurance to the user.
 
-### 3. Architecture Refactoring
-The monolithic `SensorReader` class was split to enforce separation of concerns:
-- `WeatherReader`: Wraps the `WeatherService` API client.
-- `HardwareSensorReader`: Wraps local hardware logic (currently mocked).
-
-### 4. Quality Assurance
-- **Tests**: Created `tests/test_weather_integration.py` to automatically verify that the Weather API is reachable and returning correct data formats.
-- **Docs**: Added `src/balconygreen/WEATHER_README.md` and `current_status.md` to guide new developers.
+### 3. Dependencies
+- Added `streamlit-js-eval` to enable execution of JavaScript within Streamlit for accessing the browser's Geolocation API.
 
 ## Next Steps
-1.  **Hardware**: Replace `HardwareSensorReader` mock return values with reading from a Serial Port (Arduino) or MQTT topic.
-2.  **Geolocation**: Implement browser-based auto-geolocation to fill the Sidebar automatically.
-3.  **Recommendations**: Use the new weather context (e.g., "High Humidity") to trigger disease warning rules.
+- Merge this feature into the `model-making` or `dev` branch.
+- Proceed to "Basic Recommendation System" implementation, using the disease prediction results.

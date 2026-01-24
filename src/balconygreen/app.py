@@ -120,6 +120,9 @@ class StreamController:
         return st.session_state.streaming
 
 
+from location_service import LocationService
+from streamlit_js_eval import get_geolocation
+
 # =========================
 # MAIN APP
 # =========================
@@ -127,19 +130,85 @@ class BalconyGreenApp:
     def __init__(self):
         st.set_page_config("Balcony Green", layout="centered")
         st.title("🌱 Balcony Green – Smart Plant Monitor")
+        
+        # Initialize session state for location if not exists
+        if "lat" not in st.session_state:
+            st.session_state.lat = 52.52
+        if "lon" not in st.session_state:
+            st.session_state.lon = 13.41
+        if "loc_name" not in st.session_state:
+            st.session_state.loc_name = "Berlin, Germany"
 
         # Sidebar for Location
         with st.sidebar:
             st.header("📍 Location Settings")
-            st.info("Coordinates for Weather Data")
-            lat = st.number_input("Latitude", value=52.52, format="%.4f")
-            lon = st.number_input("Longitude", value=13.41, format="%.4f")
+            st.caption(f"Selected: {st.session_state.loc_name}")
+            
+            loc_mode = st.radio("Source", ["Manual", "Search City", "Auto-Locate"])
+            
+            if loc_mode == "Manual":
+                st.session_state.lat = st.number_input("Latitude", value=st.session_state.lat, format="%.4f")
+                st.session_state.lon = st.number_input("Longitude", value=st.session_state.lon, format="%.4f")
+                if st.button("Update Name"):
+                     st.session_state.loc_name = LocationService.reverse_geocode(st.session_state.lat, st.session_state.lon)
+                     st.rerun()
+                
+            elif loc_mode == "Search City":
+                query = st.text_input("City Name")
+                if query:
+                    results = LocationService.search_city(query)
+                    if results:
+                        # Create a map of "Display Name" -> Result Object
+                        options = {r['display']: r for r in results}
+                        selection = st.selectbox("Select City", options.keys())
+                        if selection:
+                            match = options[selection]
+                            if st.button("Confirm Selection"):
+                                st.session_state.lat = match['lat']
+                                st.session_state.lon = match['lon']
+                                st.session_state.loc_name = match['display']
+                                st.success(f"Updated: {match['display']}")
+                                st.rerun()
+                    else:
+                        st.warning("No city found.")
+            
+            elif loc_mode == "Auto-Locate":
+                st.caption("Trying Browser GPS...")
+                gps_loc = get_geolocation()
+                
+                if gps_loc and "coords" in gps_loc:
+                    new_lat = gps_loc['coords']['latitude']
+                    new_lon = gps_loc['coords']['longitude']
+                    
+                    if new_lat != st.session_state.lat or new_lon != st.session_state.lon:
+                        st.session_state.lat = new_lat
+                        st.session_state.lon = new_lon
+                        st.session_state.loc_name = LocationService.reverse_geocode(new_lat, new_lon)
+                        st.rerun()
+                        
+                    st.success("✅ GPS Found")
+                else:
+                    st.caption("Fallback to IP...")
+                    if st.button("Get IP Location"):
+                        ip_loc = LocationService.get_ip_location()
+                        if ip_loc:
+                            st.session_state.lat = ip_loc['lat']
+                            st.session_state.lon = ip_loc['lon']
+                            # Combine city + country for display
+                            name_parts = [ip_loc.get('city'), ip_loc.get('country')]
+                            st.session_state.loc_name = ", ".join([p for p in name_parts if p])
+                            st.success(f"✅ IP: {st.session_state.loc_name}")
+                            st.rerun()
+                        else:
+                            st.error("Could not determine location.")
+            
+            st.info(f"Target: {st.session_state.lat:.2f}, {st.session_state.lon:.2f}")
 
         CAMERA_SNAPSHOT_URL = "http://192.168.1.100/capture"
 
         self.camera = ExternalCameraSensor(CAMERA_SNAPSHOT_URL)
         self.image_input = ImageInput(self.camera)
-        self.weather_reader = WeatherReader(lat, lon)
+        self.weather_reader = WeatherReader(st.session_state.lat, st.session_state.lon)
         self.hardware_reader = HardwareSensorReader()
         self.stream_controller = StreamController()
 
@@ -201,7 +270,7 @@ class BalconyGreenApp:
         
         with weather_col:
             st.markdown("### ☁️ Ambient Weather")
-            st.caption(f"Source: Open-Meteo (Lat: {self.weather_reader.service.lat}, Lon: {self.weather_reader.service.lon})")
+            st.caption(f"Location: {st.session_state.loc_name}")
             weather_placeholder = st.empty()
             
         with sensor_col:
