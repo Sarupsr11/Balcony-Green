@@ -8,6 +8,7 @@ import requests
 import streamlit as st
 from inference import EfficientNetClassifier  # type: ignore
 from PIL import Image
+from weather_service import WeatherService
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -32,15 +33,29 @@ class ExternalCameraSensor:
 
 
 # =========================
-# ENVIRONMENT SENSOR
+# WEATHER DATA (API)
 # =========================
-class SensorReader:
+class WeatherReader:
+    def __init__(self, lat=52.52, lon=13.41):
+        self.service = WeatherService(lat, lon)
+
+    def read(self):
+        data = self.service.get_current_weather()
+        if "error" in data:
+            return None
+        return data
+
+# =========================
+# LOCAL SENSOR (MOCK)
+# =========================
+class HardwareSensorReader:
     @staticmethod
     def read():
+        # Simulated hardware values
         return {
-            "temperature (°C)": round(random.uniform(20, 30), 2),
-            "humidity (%)": round(random.uniform(40, 70), 2),
-            "soil_moisture (%)": round(random.uniform(10, 60), 2),
+            "pot_moisture": round(random.uniform(20, 80), 1),
+            "light_lux": int(random.uniform(100, 5000)),
+            "battery_level": int(random.uniform(80, 100))
         }
 
 
@@ -113,11 +128,19 @@ class BalconyGreenApp:
         st.set_page_config("Balcony Green", layout="centered")
         st.title("🌱 Balcony Green – Smart Plant Monitor")
 
+        # Sidebar for Location
+        with st.sidebar:
+            st.header("📍 Location Settings")
+            st.info("Coordinates for Weather Data")
+            lat = st.number_input("Latitude", value=52.52, format="%.4f")
+            lon = st.number_input("Longitude", value=13.41, format="%.4f")
+
         CAMERA_SNAPSHOT_URL = "http://192.168.1.100/capture"
 
         self.camera = ExternalCameraSensor(CAMERA_SNAPSHOT_URL)
         self.image_input = ImageInput(self.camera)
-        self.sensor_reader = SensorReader()
+        self.weather_reader = WeatherReader(lat, lon)
+        self.hardware_reader = HardwareSensorReader()
         self.stream_controller = StreamController()
 
         self.classifier_all = self.load_classifier_all()
@@ -169,13 +192,44 @@ class BalconyGreenApp:
             
 
         st.divider()
-        st.subheader("📊 Live Sensor Data")
-
+        st.subheader("� Live Monitoring")
+        
         self.stream_controller.controls()
-        placeholder = st.empty()
+        
+        # Create placeholders for two columns
+        weather_col, sensor_col = st.columns(2)
+        
+        with weather_col:
+            st.markdown("### ☁️ Ambient Weather")
+            st.caption(f"Source: Open-Meteo (Lat: {self.weather_reader.service.lat}, Lon: {self.weather_reader.service.lon})")
+            weather_placeholder = st.empty()
+            
+        with sensor_col:
+            st.markdown("### 🪴 Plant Sensors")
+            st.caption("Heatlh Status (Hardware Simulation)")
+            sensor_placeholder = st.empty()
 
         while self.stream_controller.is_streaming():
-            placeholder.json(self.sensor_reader.read())
+            # Update Weather
+            weather_data = self.weather_reader.read()
+            if weather_data:
+                with weather_placeholder.container():
+                    col1, col2 = st.columns(2)
+                    col1.metric("Temp", f"{weather_data['temperature (°C)']} °C")
+                    col2.metric("Humidity", f"{weather_data['humidity (%)']} %")
+                    col3, col4 = st.columns(2)
+                    col3.metric("Rain", f"{weather_data['rain (mm)']} mm")
+                    # Display soil moisture from API as "Ground Moisture" to distinguish from pot
+                    col4.metric("Ground M.", f"{weather_data['soil_moisture']:.2f}")
+
+            # Update Hardware Sensors (simulated)
+            sensor_data = self.hardware_reader.read()
+            with sensor_placeholder.container():
+                 s_col1, s_col2 = st.columns(2)
+                 s_col1.metric("Pot Moisture", f"{sensor_data['pot_moisture']} %")
+                 s_col2.metric("Light", f"{sensor_data['light_lux']} lux")
+                 st.progress(sensor_data['battery_level'] / 100, text=f"Battery: {sensor_data['battery_level']}%")
+
             time.sleep(1)
 
 

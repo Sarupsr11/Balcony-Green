@@ -1,0 +1,75 @@
+i am in team with bacony green project , but i been away from the project and recently joined , now i havnt done anything yet but wish to understand whatever they have done and wish to contribut in project, based on provided comments form whatsapp, help me create simple guildline from where should i start , what to study and where to contribute, also in github repo there are many braches check each carefullly
+
+Welcome back to the team! Based on the chat logs and repository details provided, your team has made specific progress on the Balcony Green project, primarily focusing on a web application for plant health.
+Here is a simple guideline to help you get up to speed, understand the current codebase, and identify where you can contribute immediately.
+1. Current Project Status
+To understand what has been done so far:
+• Core Feature: The team has a "working version" of the application, but it currently has limited features. The primary functionality implemented is disease detection for tomato plants.
+• Tech Stack: The project is 100% Python-based. The frontend is built using Streamlit,.
+• Recent Activity: The team recently prepared for a "Mid-Pitch Event" on January 17th,.
+• Latest Architecture Discussion: As of January 21st, team member Sarup is working on a pipeline for storing the database and intends to finalize it after discussion.
+2. Getting Started: Technical Setup
+Before writing code, you need to set up the environment. Based on the repository instructions:
+• Repository Structure: The main application code is located in the src/balconygreen folder. Key directories include pages, models (containing .h5 and .pkl files), utils, and data.
+• Running the App: To launch the current version of the interface, run the command: streamlit run src/balconygreen/app.py.
+• Quality Checks: The project uses tox for linting and formatting. Before committing any new code, you should run:
+    ◦ tox -e lint
+    ◦ tox -e type
+    ◦ tox -e format.
+3. What to Study
+To contribute effectively, you should familiarize yourself with the following topics referenced in the sources:
+• Streamlit: Study how app.py interacts with the files in the pages/ directory (home.py, plant_health.py, etc.).
+• Machine Learning Models:
+    ◦ Review the PlantVillage Dataset (referenced in the Readme) to understand the data used for the disease detection model.
+    ◦ Look into the shared resources regarding PlantSeg and tf_plant_disease_classification suggested in the chat.
+• Weather APIs: The team plans to integrate weather data, so studying public Weather APIs would be beneficial.
+4. Where to Contribute
+Based on the meeting minutes from January 13th and recent chats, here are the specific areas where help is needed:
+• Nutrient Deficiency Model: The team decided to "proceed with the Nutrient Deficiency Model". You could check if this has been started or needs data collection/modeling.
+• Weather & Watering Module: There is a task to perform "Analysis of Weather data" and integrate a "Weather API... with the watering model".
+• Database Pipeline: Sarup is working on the database storage pipeline. You could review this work or ask if assistance is needed in connecting the database to the Streamlit frontend.
+• Unit Testing: The documentation notes that test files are "optional" but can be included. Currently, there is a tests folder with test_predictor.py. Expanding test coverage (tox -e py) would be a valuable maintenance contribution.
+5. GitHub Repository & Branches
+You asked to check the branches carefully. Based on the provided source views of the repository:
+• Visible Branches: The sources provided only display the main file tree (likely the main or master branch) and do not explicitly list the names of other active branches (e.g., dev or feature/xyz).
+• Key Folders to Navigate: Instead of separate branches, the project seems to be organized by folders that you should check:
+    ◦ disease-detection: Likely contains the training scripts or raw logic for the disease models.
+    ◦ notebooks: Contains data_exploration.ipynb and model_training.ipynb. This is critical for understanding how the models in src/ were created.
+    ◦ src/balconygreen/utils: Contains predictor.py, recommender.py, and preprocessing.py. This is where the core logic resides.
+Recommendation: Since the team mentioned meeting offline (at the Library) recently to discuss the pipeline,, your best first step is to pull the latest changes from the main branch, run the Streamlit app locally, and then message the group to ask which of the "Nutrient" or "Weather" tasks is currently unassigned.
+How do I integrate the Weather API into the watering model?
+Where can I find data to build the Nutrient Deficiency Model?
+What are the next steps for finalizing the database pipeline?
+create guidline for downloading data and testing the current codes step by step then suggest which one is easier to do nutrient defieciency model or weather and watering module, i will focus on which that has easily availble datas. search such datas
+
+Based on the project repository structure and team discussions, here is your step-by-step guideline for setting up the data and testing the code. Following that is a recommendation on which task to choose based on data availability.
+Part 1: Guideline for Downloading Data & Testing Code
+Follow these steps to synchronize your local environment with the team's current progress.
+Step 1: Verify Project Structure Ensure your local folder matches the structure shown in the repository. You should see a src folder containing balconygreen, and a notebooks folder.
+• Key File to Check: Locate src/balconygreen/data/plant_data.csv and environment_data.csv. These likely contain the tabular data needed for the basic logic.
+Step 2: Download the External Datasets The repository code likely relies on large image datasets that are not stored directly on GitHub.
+• Disease Detection Data: The team uses the PlantVillage Dataset. You need to download this from Kaggle: https://www.kaggle.com/datasets/abdallahalidev/plantvillage-dataset.
+• Model Files: Check the src/balconygreen/models folder for disease_model.h5 and growth_model.pkl. If these are not in the repo (often ignored due to size), ask Sarup for the .h5 file, as the team has a "working version... detecting disease for tomato plant".
+Step 3: Run the Quality Checks (Testing) Before running the app, use tox to ensure your environment and dependencies are correct. The team uses specific commands for this:
+1. Check for errors: Run tox -e lint and tox -e type.
+2. Run formatting: Run tox -e format.
+3. Run Unit Tests: Run tox -e py. (Note: Currently, there is one test file tests/test_predictor.py).
+Step 4: Launch the Application To see the current interface:
+• Run the command: streamlit run src/balconygreen/app.py,.
+• Navigate to the Plant Health page (located in src/balconygreen/pages/plant_health.py) to test the disease detection features the team has already built.
+
+--------------------------------------------------------------------------------
+Part 2: Recommendation on Where to Contribute
+You asked which module is easier to start with: the Nutrient Deficiency Model or the Weather and Watering Module.
+Recommendation: Start with the Weather and Watering Module.
+Why?
+1. Data Availability: Weather data is instantly available via public APIs, whereas training a "Nutrient Deficiency Model" requires finding a specific, high-quality image dataset of nutrient-deficient leaves, which is much harder to source than general disease images.
+2. Complexity: The team's minutes explicitly mention "Weather API to be integrated". This is a coding integration task (connecting to an existing data source) rather than a machine learning training task, making it "easier" to get a quick win.
+3. Current Progress: The team has already finished the disease detection for tomatoes, but the weather analysis is listed as a "to be performed" task, making it a high-priority open item.
+Part 3: Data Source Strategy (Weather Module)
+Since you chose to focus on easily available data, here is how you should approach the Weather/Watering task based on the sources:
+1. Existing Data: Check src/balconygreen/data/environment_data.csv. This file likely contains the structure (columns) the team expects for weather data (e.g., humidity, temperature).
+2. Data Source (API): The project roadmap requires an "Analysis of Weather data" and integration with a "Weather API".
+    ◦ Action: You do not need to download a static dataset. Instead, you need to write a script in src/balconygreen/utils (perhaps adding to predictor.py) that fetches live data.
+    ◦ Suggested Source: While the provided text does not list a specific URL, standard free APIs (like Open-Meteo or OpenWeatherMap) are the industry standard for this task.
+Summary of your first contribution: Create a function that fetches real-time temperature/humidity and integrates it into the logic found in recommender.py to adjust watering advice.
