@@ -8,16 +8,43 @@ name = "balconygreen"
 readme = "README.md"
 license= "Apache-2.0"
 dependencies = [
+    # Streamlit & UI
     "streamlit",
+    "streamlit-cookies-manager",
+
+    # HTTP requests
     "requests",
+
+    # Data handling
     "pandas",
     "numpy",
+
+    # Machine Learning / Computer Vision
     "scikit-learn",
+    "torch",
     "torchvision",
-    "matplotlib",
     "timm",
+    "matplotlib",
     "tqdm",
-    "torch"
+
+    # Backend API
+    "fastapi",
+    "uvicorn[standard]",   # for running FastAPI
+
+    # Authentication & Security
+    "python-jose[cryptography]",  # JWT
+    "passlib[bcrypt]",            # password hashing
+    "passlib",
+
+    # Database
+    "sqlalchemy",                 # ORM
+    "databases",                  # async DB connections (optional)
+
+    # Optional for async HTTP in FastAPI
+    "httpx",
+
+    # Environment variables
+    "python-dotenv"
 ]
 
 

@@ -1,9 +1,9 @@
 from pathlib import Path
 
-import timm
-import torch
-from PIL import Image
-from torchvision import transforms
+import timm # type: ignore
+import torch # type: ignore
+from PIL import Image # type: ignore
+from torchvision import transforms # type: ignore
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 

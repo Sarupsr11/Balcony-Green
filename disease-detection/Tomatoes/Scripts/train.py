@@ -15,16 +15,16 @@ import os
 from collections import Counter
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-import timm
-import torch
-import torch.nn as nn
-from PIL import Image, ImageFile
-from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, precision_score, recall_score
-from torch.utils.data import DataLoader, Dataset, random_split
-from torchvision import transforms
-from tqdm import tqdm
+import matplotlib.pyplot as plt # type: ignore
+import seaborn as sns # type: ignore
+import timm # type: ignore
+import torch # type: ignore
+import torch.nn as nn # type: ignore
+from PIL import Image, ImageFile # type: ignore
+from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, precision_score, recall_score # type: ignore
+from torch.utils.data import DataLoader, Dataset, random_split # type: ignore
+from torchvision import transforms # type: ignore
+from tqdm import tqdm # type: ignore
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 device = "cuda" if torch.cuda.is_available() else "cpu"
