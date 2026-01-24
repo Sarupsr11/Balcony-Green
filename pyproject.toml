@@ -8,17 +8,43 @@ name = "balconygreen"
 readme = "README.md"
 license= "Apache-2.0"
 dependencies = [
+    # Streamlit & UI
     "streamlit",
-    "pydantic",
-    "click",
-    "fastapi[standard]",
+    "streamlit-cookies-manager",
+
+    # HTTP requests
     "requests",
-    "typing",
+
+    # Data handling
     "pandas",
     "numpy",
+
+    # Machine Learning / Computer Vision
     "scikit-learn",
+    "torch",
+    "torchvision",
+    "timm",
     "matplotlib",
-    "scipy"
+    "tqdm",
+
+    # Backend API
+    "fastapi",
+    "uvicorn[standard]",   # for running FastAPI
+
+    # Authentication & Security
+    "python-jose[cryptography]",  # JWT
+    "passlib[bcrypt]",            # password hashing
+    "passlib",
+
+    # Database
+    "sqlalchemy",                 # ORM
+    "databases",                  # async DB connections (optional)
+
+    # Optional for async HTTP in FastAPI
+    "httpx",
+
+    # Environment variables
+    "python-dotenv"
 ]
 
 
@@ -62,7 +88,7 @@ test = [
 
 [tool.ruff]
 # Set the maximum line length to 79.
-line-length = 120
+line-length = 150
 
 [tool.ruff.lint]
 select = [
