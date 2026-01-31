@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "device_id": "099c4beb-234a-4f3a-a86a-d15d83ee40ce",
+  "device_key": "3804bdd5-c04d-484c-a8d9-6a4de2e15c70",
+  "sensor_map": {
+    "soil_ph": "4b4f3cd2-85db-4b95-9f12-3d862099494e",
+    "temperature": "2af6cc4a-b1b8-4e4e-8f9e-aaa24a86f0d0",
+    "humidity": "803b2690-abc7-414f-8877-88f820e82b2d"
+  },
+  "device_type": "physical"
+}

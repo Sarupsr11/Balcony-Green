@@ -1,17 +1,17 @@
+import datetime
 import random
 import tempfile
 import time
-from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, Optional
-import datetime
+
 import requests  # type: ignore
 import streamlit as st  # type: ignore
+from camera_sensor import ExternalCameraSensor, ImageInput
 from inference import EfficientNetClassifier  # type: ignore
 from PIL import Image  # type: ignore
+
 from balconygreen.sensor_reading import SensorReader
-from camera_sensor import ExternalCameraSensor, ImageInput
-import uuid
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 CKPT_PATH_TOMATO_11 = PROJECT_ROOT / "disease-detection" / "Tomatoes" / "Models" / "efficientnet_best_multiple_sources.pth"
@@ -19,9 +19,6 @@ CKPT_PATH_TOMATO_2 = PROJECT_ROOT / "disease-detection" / "Tomatoes" / "Models" 
 
 FASTAPI_URL = "http://127.0.0.1:8000"
 api_key = "https://api.open-meteo.com/v1/forecast"
-
-
-
 
 
 # =========================
@@ -50,19 +47,14 @@ class StreamController:
 # =========================
 class BalconyGreenApp:
     def __init__(self, access_token: str | None):
-
         self.access_token = access_token
-        self.headers = (
-            {"Authorization": f"Bearer {access_token}"}
-            if access_token else None
-        )
+        self.headers = {"Authorization": f"Bearer {access_token}"} if access_token else None
 
         if not access_token:
             st.info("You are using Balcony Green as a guest. Sensor data will not be saved.")
 
         st.set_page_config("Balcony Green", layout="centered")
         st.title("🌱 Balcony Green – Smart Plant Monitor")
-
 
         # Initialize session state
         if "page_func" not in st.session_state:
@@ -74,7 +66,7 @@ class BalconyGreenApp:
         self.camera = ExternalCameraSensor(CAMERA_SNAPSHOT_URL)
         self.image_input = ImageInput(self.camera, self.access_token)
 
-        self.sensor_reader: Optional[SensorReader] = None
+        self.sensor_reader: SensorReader | None = None
         self.stream_controller = StreamController()
 
         self.classifier_all = self.load_classifier_all()
@@ -82,23 +74,16 @@ class BalconyGreenApp:
 
     @st.cache_resource
     def load_classifier_all(_self):
-        return EfficientNetClassifier(
-            model_path=CKPT_PATH_TOMATO_11,
-            num_classes=11
-        )
+        return EfficientNetClassifier(model_path=CKPT_PATH_TOMATO_11, num_classes=11)
 
     @st.cache_resource
     def load_classifier_binary(_self):
-        return EfficientNetClassifier(
-            model_path=CKPT_PATH_TOMATO_2,
-            num_classes=2
-        )
+        return EfficientNetClassifier(model_path=CKPT_PATH_TOMATO_2, num_classes=2)
 
     def predict_tomato_image(self, image: Image.Image):
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
             image.save(tmp.name)
-            return self.classifier_all.predict(tmp.name, top_k=3, confidence_threshold=0.0), \
-                   self.classifier_binary.predict(tmp.name)
+            return self.classifier_all.predict(tmp.name, top_k=3, confidence_threshold=0.0), self.classifier_binary.predict(tmp.name)
 
     def predict_plant(self, image: Image.Image):
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
@@ -106,7 +91,6 @@ class BalconyGreenApp:
             return random.choice(["Tomato", "Potato", "Mint"])
 
     def run(self):
-
         st.subheader("Home Page")
 
         # -----------------------
@@ -119,16 +103,13 @@ class BalconyGreenApp:
         if st.button("Register Sensor"):
             if device_info:
                 for sensors in sensor_type:
-                    payload = {"sensor_name": sensors, "sensor_source"           : "Environment Sensors",
-                                "device_info": device_info}
-                    headers={
-                        "Authorization": f"Bearer {self.access_token}"
-                    }
+                    payload = {"sensor_name": sensors, "sensor_source": "Environment Sensors", "device_info": device_info}
+                    headers = {"Authorization": f"Bearer {self.access_token}"}
                     try:
                         requests.post(f"{FASTAPI_URL}/register_sensors", json=payload, headers=headers, timeout=3)
                         st.success(f"{sensor_type} sensor registered!")
-                    except:
-                        st.error(f"Failed to register sensor {sensors}")
+                    except requests.RequestException as err:
+                        st.error(f"Failed to register sensor {sensors}: {err}")
             else:
                 st.info("Leave blank if using Weather API instead")
 
@@ -140,24 +121,13 @@ class BalconyGreenApp:
         city = st.text_input("City (Weather API only)", "London") if sensor_source == "Weather API" else None
         if sensor_source == "Weather API":
             sensor_type = st.multiselect("Choose Parameters", ["temperature", "humidity"])
-            headers = {
-                "Authorization": f"Bearer {self.access_token}"
-            }
+            headers = {"Authorization": f"Bearer {self.access_token}"}
 
-            for sensor in sensor_type:  
-                payload = {
-                    "sensor_name": sensor,
-                    "sensor_source": "Weather API",
-                    "device_info": api_key
-                }
+            for sensor in sensor_type:
+                payload = {"sensor_name": sensor, "sensor_source": "Weather API", "device_info": api_key}
 
                 try:
-                    r = requests.post(
-                        f"{FASTAPI_URL}/register_sensors",
-                        json=payload,
-                        headers=headers,
-                        timeout=3
-                    )
+                    r = requests.post(f"{FASTAPI_URL}/register_sensors", json=payload, headers=headers, timeout=3)
 
                     print(r.status_code, r.text)
 
@@ -171,29 +141,26 @@ class BalconyGreenApp:
                 except Exception as e:
                     st.error(f"Request failed for {sensor}: {e}")
 
-
-
         self.sensor_reader = SensorReader(access_token=self.access_token, source=sensor_source, city=city, api_key=api_key)
 
         # Start streaming continuously
-        self.stream_controller.controls()  
+        self.stream_controller.controls()
 
         last_saved = datetime.datetime.now()
         placeholder = st.empty()
         while self.stream_controller.is_streaming():
             readings = self.sensor_reader.read()
-            
+
             # Show in Streamlit
             placeholder.json(readings)
-            
+
             # Send to FastAPI periodically (30 minutues)
             now = datetime.datetime.now()
-            if (now-last_saved).total_seconds() >= 30*60:
+            if (now - last_saved).total_seconds() >= 30 * 60:
                 self.sensor_reader.send_to_api(readings, sensor_source)
                 last_saved = now
-    
-            time.sleep(1)  # adjust the interval as needed
 
+            time.sleep(1)  # adjust the interval as needed
 
         # -----------------------
         # IMAGE INPUT
@@ -238,7 +205,7 @@ class BalconyGreenApp:
                             st.success(f"{r['class_name']}")
                     if health_status and st.button("Possible Disease Type"):
                         for r in results_1:
-                            st.success(f"{r['class_name']} — {r['confidence']*100:.6f}%")
+                            st.success(f"{r['class_name']} — {r['confidence'] * 100:.6f}%")
 
             st.divider()
             st.subheader("📊 Live Sensor Data")
@@ -260,4 +227,4 @@ class BalconyGreenApp:
 # ENTRY POINT
 # =========================
 def main_page(access: str):
-    BalconyGreenApp(access_token = access).run()
+    BalconyGreenApp(access_token=access).run()

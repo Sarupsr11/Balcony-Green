@@ -63,9 +63,18 @@
 ![Balcony Green Gantt Chart](image.png)
 
 
-## Run Streamlit
+## Run Streamlit (frontend)
 
-streamlit run src/balconygreen/app.py
+streamlit run src/balconygreen/frontend/login_page.py
+
+## Run FastApi
+
+uvicorn src.balconygreen.backend.api:app --reload
+
+## Run sensor uninterrupted
+
+python .\src\balconygreen\uninterrupted_sensor_reading.py
+
 
 
 

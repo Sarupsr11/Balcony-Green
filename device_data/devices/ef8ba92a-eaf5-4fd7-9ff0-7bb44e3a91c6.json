@@ -1,0 +1,10 @@
+{
+  "status": "success",
+  "device_id": "ef8ba92a-eaf5-4fd7-9ff0-7bb44e3a91c6",
+  "device_key": "8f785b68-693c-4f91-957e-975784834757",
+  "sensor_map": {
+    "temperature": "823d6e21-ce91-4a2a-b21a-de018e83af18",
+    "humidity": "8c5d1cf4-c475-4e3e-8e71-9d6e4a7d3ebf"
+  },
+  "device_type": "weather_api"
+}

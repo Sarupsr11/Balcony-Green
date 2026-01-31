@@ -1,7 +1,12 @@
-
 # ------ #
 # optimal environmal factors for different plans #
 # ------ #
+
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
 
 class PlantOptimal:
     """
@@ -53,26 +58,17 @@ class PlantOptimal:
     """
 
     def __init__(
-        self,
-        name,
-        soil_moisture_min,
-        soil_moisture_max,
-        ph_min,
-        ph_max,
-        temp_min,
-        temp_max,
-        humidity_min,
-        humidity_max,
-        light_min,
-        light_max
+        self, name, soil_moisture_min, soil_moisture_max, ph_min, ph_max, temp_min, temp_max, humidity_min, humidity_max, light_min, light_max
     ):
         self.name = name
+        logger.debug(f"Creating PlantOptimal instance for: {name}")
 
         self.soil_moisture_optimal = (soil_moisture_min, soil_moisture_max)
         self.soil_ph_optimal = (ph_min, ph_max)
         self.temperature_optimal = (temp_min, temp_max)
         self.humidity_optimal = (humidity_min, humidity_max)
         self.light_hours_optimal = (light_min, light_max)
+        logger.debug(f"Plant {name} optimal ranges initialized")
 
     def __repr__(self):
         return f"Plant({self.name})"
@@ -89,7 +85,7 @@ tomato_optimal = PlantOptimal(
     humidity_min=50,
     humidity_max=70,
     light_min=6,
-    light_max=8
+    light_max=8,
 )
 
 chili_optimal = PlantOptimal(
@@ -103,7 +99,7 @@ chili_optimal = PlantOptimal(
     humidity_min=50,
     humidity_max=65,
     light_min=6,
-    light_max=8
+    light_max=8,
 )
 
 potato_optimal = PlantOptimal(
@@ -117,7 +113,7 @@ potato_optimal = PlantOptimal(
     humidity_min=55,
     humidity_max=75,
     light_min=6,
-    light_max=8
+    light_max=8,
 )
 
 mint_optimal = PlantOptimal(
@@ -131,7 +127,7 @@ mint_optimal = PlantOptimal(
     humidity_min=55,
     humidity_max=75,
     light_min=4,
-    light_max=6
+    light_max=6,
 )
 
 basil_optimal = PlantOptimal(
@@ -145,7 +141,7 @@ basil_optimal = PlantOptimal(
     humidity_min=50,
     humidity_max=70,
     light_min=6,
-    light_max=8
+    light_max=8,
 )
 
 coriander_optimal = PlantOptimal(
@@ -159,7 +155,7 @@ coriander_optimal = PlantOptimal(
     humidity_min=50,
     humidity_max=70,
     light_min=4,
-    light_max=6
+    light_max=6,
 )
 
 spinach_optimal = PlantOptimal(
@@ -173,7 +169,7 @@ spinach_optimal = PlantOptimal(
     humidity_min=55,
     humidity_max=75,
     light_min=4,
-    light_max=6
+    light_max=6,
 )
 
 aloe_vera_optimal = PlantOptimal(
@@ -187,8 +183,5 @@ aloe_vera_optimal = PlantOptimal(
     humidity_min=30,
     humidity_max=50,
     light_min=6,
-    light_max=8
+    light_max=8,
 )
-
-
-
