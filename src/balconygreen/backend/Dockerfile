@@ -62,4 +62,4 @@ ENV PORT=8000
 # --------------------------------------------------
 # Start FastAPI backend
 # --------------------------------------------------
-CMD ["sh", "-c", "uvicorn balconygreen.backend.api:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "uvicorn balconygreen.backend.api:app --host 0.0.0.0 --port ${PORT} --log-level info"]

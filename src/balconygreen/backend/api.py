@@ -79,9 +79,15 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 device_scheme = HTTPBearer(auto_error=False)
 
 
+@app.get("/favicon.ico")
+def favicon():
+    return {}
+
 # ======================
 # Storage
 # ======================
+
+
 
 FIRMWARE_DIR = Path("firmware_bins")
 IMAGE_DIR = Path("images")
