@@ -15,7 +15,7 @@ import time
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-FASTAPI_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+FASTAPI_URL = os.getenv("FASTAPI_URL", "https://balconygreen-production.up.railway.app")
 
 import streamlit.components.v1 as components # type: ignore
 

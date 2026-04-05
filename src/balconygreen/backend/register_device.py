@@ -5,7 +5,7 @@ from pathlib import Path
 
 import requests  # type: ignore
 
-FASTAPI_URL =  os.getenv("BACKEND_URL","http://localhost:8000")
+FASTAPI_URL =  os.getenv("FASTAPI_URL","https://balconygreen-production.up.railway.app")
 
 
 DEVICE_DIR = Path("device_data/devices")

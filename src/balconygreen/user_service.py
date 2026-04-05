@@ -12,7 +12,7 @@ from utils import hash_password, verify_password
 # -------------------------
 # Config
 # -------------------------
-SECRET_KEY = "CHANGE_ME_TO_ENV_SECRET"
+SECRET_KEY = "CHANGE_ME"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 

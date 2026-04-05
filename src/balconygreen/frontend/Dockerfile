@@ -48,4 +48,4 @@ RUN echo "Exposed port 8501"
 # --------------------------------------------------
 # Start Streamlit
 # --------------------------------------------------
-CMD ["streamlit", "run", "balconygreen/frontend/login_page.py", "--server.address=0.0.0.0", "--server.port=8501"]
+CMD ["sh", "-c", "streamlit run balconygreen/frontend/login_page.py --server.address=0.0.0.0 --server.port ${PORT}"]

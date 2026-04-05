@@ -8,7 +8,7 @@ from streamlit_cookies_manager import EncryptedCookieManager  # type: ignore
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-API_URL = os.getenv("BACKEND_URL","http://localhost:8000")
+FASTAPI_URL = os.getenv("FASTAPI","https://balconygreen-production.up.railway.app")
 
 
 # -------------------------
@@ -66,7 +66,7 @@ class AuthClient:
             return None
 
 
-auth_client = AuthClient(API_URL)
+auth_client = AuthClient(FASTAPI_URL)
 
 
 # -------------------------
