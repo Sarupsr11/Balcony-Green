@@ -7,7 +7,7 @@ from pathlib import Path
 import requests  # type: ignore
 import streamlit as st  # type: ignore
 from camera_sensor import ExternalCameraSensor, ImageInput
-from inference import EfficientNetClassifier  # type: ignore
+from balconygreen.model_prediction.inference import EfficientNetClassifier  # type: ignore
 from PIL import Image  # type: ignore
 
 from balconygreen.sensor_reading import SensorReader

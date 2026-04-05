@@ -1,46 +1,56 @@
 import datetime
 import logging
-import random
-import tempfile
 from pathlib import Path
-
-import requests  # type: ignore
-import streamlit as st  # type: ignore
-from PIL import Image  # type: ignore
+import requests # type: ignore
+import streamlit as st # type: ignore
+from PIL import Image # type: ignore
+import pandas as pd # type: ignore
 
 from balconygreen.backend.register_device import DeviceRegister, remove_device
 from balconygreen.camera_sensor import ImageInput
-from balconygreen.inference import EfficientNetClassifier  # type: ignore
 from balconygreen.sensor_reading import SensorReader
 
+import os
+import time
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-DEVICE_FILE = Path("device_data/device_info.json")
-WEATHER_FILE = Path("device_data/weather_info.json")
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
-CKPT_PATH_TOMATO_11 = PROJECT_ROOT / "disease-detection" / "Tomatoes" / "Models" / "efficientnet_best_multiple_sources.pth"
-CKPT_PATH_TOMATO_2 = PROJECT_ROOT / "disease-detection" / "Tomatoes" / "Models" / "efficientnet_binary_best_multiple_sources.pth"
+FASTAPI_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
-FASTAPI_URL = "http://127.0.0.1:8000"
-api_key = "https://api.open-meteo.com/v1/forecast"
+import streamlit.components.v1 as components # type: ignore
 
 
-# =========================
-# MAIN APP
-# =========================
+def esp32_flasher(manifest_url):
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <script type="module"
+        src="https://unpkg.com/esp-web-tools@8/dist/web/install-button.js?module">
+        </script>
+    </head>
+
+    <body>
+    <h3>Flash your ESP32</h3>
+    <esp-web-install-button
+        manifest="{manifest_url}">
+    </esp-web-install-button>
+    <p>Click connect and choose your ESP32 serial port.</p>
+    </body>
+    </html>
+    """
+    components.html(html_code, height=300)
+
+
 class BalconyGreenApp:
+
+
     def __init__(self, access_token: str | None):
         self.access_token = access_token
         self.headers = {"Authorization": f"Bearer {access_token}"} if access_token else None
         self.simulated = False
         self.city = None
-
-        logger.info(f"BalconyGreenApp initialized - authenticated: {access_token is not None}")
-
-        if not access_token:
-            st.info("You are using Balcony Green as a guest. Sensor data will not be saved.")
-            logger.info("Guest mode enabled")
+        self.plant_list = ["Tomato"]
 
         st.set_page_config("Balcony Green", layout="centered")
         st.title("🌱 Balcony Green – Smart Plant Monitor")
@@ -51,595 +61,366 @@ class BalconyGreenApp:
         if "predicted_plant" not in st.session_state:
             st.session_state["predicted_plant"] = None
 
-        # CAMERA_SNAPSHOT_URL = "http://192.168.1.100/capture"
-        
         self.image_input = ImageInput(self.access_token)
-
         self.sensor_reader: SensorReader | None = None
+        self.api_key = "https://api.open-meteo.com/v1/forecast"
 
-        self.classifier_all = self.load_classifier_all()
-        self.classifier_binary = self.load_classifier_binary()
-        self.api_key = api_key
-
-    @st.cache_resource
-    def load_classifier_all(_self):
-        return EfficientNetClassifier(model_path=CKPT_PATH_TOMATO_11, num_classes=11)
-
-    @st.cache_resource
-    def load_classifier_binary(_self):
-        return EfficientNetClassifier(model_path=CKPT_PATH_TOMATO_2, num_classes=2)
-
-    def predict_tomato_image(self, image: Image.Image):
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-            image.save(tmp.name)
-            return self.classifier_all.predict(tmp.name, top_k=3, confidence_threshold=0.0), self.classifier_binary.predict(tmp.name)
-
-    def predict_plant(self, image: Image.Image):
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-            image.save(tmp.name)
-            return random.choice(["Tomato", "Potato", "Mint"])
-
-    def test_device_connection(self, device_ip: str | None) -> bool:
-        """Test if a device is reachable via ping or HTTP request"""
-        if not device_ip:
-            logger.debug("No device IP provided for connection test")
-            return False
-
-        logger.debug(f"Testing device connection to: {device_ip}")
-        try:
-            # Try HTTP request first (for web-enabled devices)
-            response = requests.get(f"http://{device_ip}", timeout=5)
-            logger.info(f"Device connection test successful: {device_ip}")
-            return response.status_code < 400
-        except Exception as e:
-            logger.warning(f"Device connection test failed for {device_ip}: {e}")
-            return False
-        except requests.RequestException:
-            try:
-                # Fallback to ping
-                import subprocess
-
-                result = subprocess.run(["ping", "-n", "1", "-w", "2000", device_ip], capture_output=True, text=True)
-                return result.returncode == 0
-            except requests.RequestException:
-                return False
-
-    def test_weather_api(self, city: str) -> bool:
-        """Test if weather API is working for a given city"""
-        try:
-            # Test geocoding API
-            params = {"name": city, "count": 1, "language": "en", "format": "json"}
-            response = requests.get("https://geocoding-api.open-meteo.com/v1/search", params=params, timeout=5)
-            return response.status_code == 200 and "results" in response.json()
-        except requests.RequestException:
-            return False
-
+    # ------------------------
+    # Sensor Readings
+    # ------------------------
     def display_sensor_readings(self):
-        """Display beautiful sensor readings automatically"""
-        # Add custom CSS for beautiful styling
-        st.markdown(
-            """
-        <style>
-        .sensor-card {
-            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 20px;
-            padding: 25px;
-            text-align: center;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-            backdrop-filter: blur(10px);
-            margin: 15px 0;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        .sensor-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 40px rgba(0,0,0,0.2);
-        }
-        .sensor-icon {
-            font-size: 3em;
-            margin-bottom: 15px;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
-        }
-        .sensor-name {
-            font-size: 1em;
-            color: #888;
-            margin-bottom: 10px;
-            font-weight: 500;
-        }
-        .sensor-value {
-            font-size: 2.2em;
-            font-weight: 700;
-            margin: 0;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .status-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
-        .status-online {
-            background: #4CAF50;
-            box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
-        }
-        .status-offline {
-            background: #f44336;
-            box-shadow: 0 0 10px rgba(244, 67, 54, 0.5);
-        }
-        </style>
-        """,
-            unsafe_allow_html=True,
-        )
-        # Create placeholders for real-time updates
-        if "sensor_placeholders" not in st.session_state:
-            st.session_state.sensor_placeholders = {}
+        st.subheader("🌡️ Live Sensor Readings")
 
-        # Get devices for sensor reader
-        is_guest = not self.access_token
-        sensor_devices = []
-        sensor_weather_config = None
+        # st.info("Sensor readings display is under development.")
+        
 
-        if is_guest:
-            sensor_devices = st.session_state.get("guest_devices", [])
-            sensor_weather_config = st.session_state.get("guest_weather_config")
-        else:
-            try:
-                devices_response = requests.get(f"{FASTAPI_URL}/devices", headers=self.headers, timeout=3)
-                sensor_devices = devices_response.json() if devices_response.status_code == 200 else []
-            except requests.RequestException:
-                sensor_devices = []
+   
 
-        # Separate physical devices and weather API devices
-        # physical_devices = [d for d in sensor_devices if d.get('type') != 'weather_api']
-        weather_devices = [d for d in sensor_devices if d.get("type") == "weather_api"]
-        if sensor_weather_config:
-            weather_devices.append(sensor_weather_config)
-
-        # Initialize filter preferences in session state
-        if "show_physical_sensors" not in st.session_state:
-            st.session_state["show_physical_sensors"] = True
-        if "show_weather_sensors" not in st.session_state:
-            st.session_state["show_weather_sensors"] = True
-
-        # Add sensor type filter controls
-        filter_col1, filter_col2 = st.columns(2)
-        with filter_col1:
-            st.session_state["show_physical_sensors"] = st.checkbox(
-                "📡 Physical Sensors", value=st.session_state["show_physical_sensors"], key="physical_filter"
+        try:
+            response = requests.get(
+                f"{FASTAPI_URL}/readings",
+                headers={"Authorization": f"Bearer {self.access_token}"}
             )
-        with filter_col2:
-            st.session_state["show_weather_sensors"] = st.checkbox(
-                "🌤️ Weather API", value=st.session_state["show_weather_sensors"], key="weather_filter"
-            )
+            
+            if response.status_code != 200:
+                st.error("Failed to fetch sensor readings")
+                return
 
-        st.divider()
+            data = response.json()
 
-        # Create sensor reader
-        # Add two functions later on that display real time sensor readings
-        self.sensor_reader = SensorReader(
-            use_simulated=self.simulated,
-            city=self.city,
-            api_key=self.api_key,
-        )
+            if not data:
+                st.info("No sensor readings available yet.")
+                return
 
-        # Auto-refresh every 5 seconds
-        if "last_refresh" not in st.session_state:
-            st.session_state.last_refresh = datetime.datetime.now()
+            df = pd.DataFrame(data)
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+            df = df.sort_values(by="timestamp", ascending=False)
 
-        # Check if 5 seconds have passed
-        now = datetime.datetime.now()
-        if (now - st.session_state.last_refresh).total_seconds() >= 5:
-            st.session_state.last_refresh = now
-            st.rerun()
+            # ------------------------
+            # Helper: color + icon
+            # ------------------------
+            def sensor_style(sensor, value):
+                sensor = sensor.lower()
 
-        if st.button("🔄 Refresh Now", key="refresh_sensors"):
-            st.session_state.last_refresh = datetime.datetime.now()
-            st.rerun()
+                if "temperature" in sensor:
+                    if value > 35:
+                        return "🔥", "red"
+                    elif value < 10:
+                        return "❄️", "blue"
+                    return "🌡️", "green"
 
-        # For logged-in users, fetch stored readings from database
-        db_readings_physical = {}
-        db_readings_weather = {}
-        if self.access_token:
-            try:
-                db_response = requests.get(f"{FASTAPI_URL}/readings", headers=self.headers, timeout=3)
-                if db_response.status_code == 200:
-                    db_readings_list = db_response.json()
-                    # Get latest reading for each sensor
-                    for reading in db_readings_list:
-                        sensor_name = reading["sensor_name"]
-                        sensor_source = reading["source"]
-                        if sensor_name not in db_readings_weather and sensor_source == "weather api":
-                            db_readings_weather[sensor_name] = reading["value"]
-                        elif sensor_name not in db_readings_physical:
-                            db_readings_physical[sensor_name] = reading["value"]
-            except Exception as e:
-                print(f"Failed to fetch database readings: {e}")
+                if "humidity" in sensor:
+                    if value > 80:
+                        return "💧", "blue"
+                    elif value < 30:
+                        return "🏜️", "orange"
+                    return "💧", "green"
 
-        # Use database readings if available, otherwise use real-time readings
-        # current only retrieving data from the database, add functions to retrieve real time sensor value
-        readings_to_display_physical = db_readings_physical if db_readings_physical else None
-        readings_to_display_weather = db_readings_weather if db_readings_weather else None
+                if "soil" in sensor:
+                    if value < 300:
+                        return "🌱", "red"
+                    return "🌿", "green"
 
-        # Define sensor display info
-        sensor_info_physical = {
-            "temperature": {"icon": "🌡️", "unit": "°C", "name": "Temperature", "color": "#FF6B6B"},
-            "humidity": {"icon": "💧", "unit": "%", "name": "Humidity", "color": "#4ECDC4"},
-            "soil_moisture": {"icon": "🌱", "unit": "%", "name": "Soil Moisture", "color": "#45B7D1"},
-            "soil_ph": {"icon": "🧪", "unit": "", "name": "Soil pH", "color": "#96CEB4"},
-            "light": {"icon": "☀️", "unit": "%", "name": "Light Level", "color": "#FFEAA7"},
-            "camera": {"icon": "📷", "unit": "", "name": "Camera", "color": "#DDA0DD"},
-        }
+                if "light" in sensor:
+                    return "☀️", "yellow"
 
-        # Display each sensor reading
+                return "📟", "gray"
 
-        if readings_to_display_physical:
-            # Display readings in a beautiful layout
-            st.subheader("Physical Sensor Readings")
-            col1, col2, col3, col4, col5 = st.columns(5)
-            columns = [col1, col2, col3, col4, col5]
-            sensor_index = 0
-            for sensor_name, value in readings_to_display_physical.items():
-                if sensor_name in sensor_info_physical and sensor_index < len(columns):
-                    info = sensor_info_physical[sensor_name]
-                    with columns[sensor_index]:
-                        # Beautiful sensor card
-                        st.markdown(
-                            f"""
-                        <div class="sensor-card" style="border-left: 5px solid {info["color"]};">
-                            <div class="sensor-icon">{info["icon"]}</div>
-                            <div class="sensor-name">{info["name"]}</div>
-                            <div class="sensor-value" style="color: {info["color"]};">
-                                {value:.1f}<span style="font-size: 0.6em; font-weight: 400;">{info["unit"]}</span>
-                            </div>
-                        </div>
-                        """,
-                            unsafe_allow_html=True,
+            # ------------------------
+            # Group by sensor
+            # ------------------------
+            sensors = df["sensor_name"].unique()
+
+            cols = st.columns(2)  # grid layout
+
+            for i, sensor in enumerate(sensors):
+                sensor_df = df[df["sensor_name"] == sensor]
+                latest = sensor_df.iloc[0]
+
+                icon, color = sensor_style(sensor, latest["value"])
+
+                with cols[i % 2]:
+                    with st.container():
+                        st.markdown(f"### {icon} {sensor.capitalize()}")
+
+                        # Styled metric
+                        st.metric(
+                            label="Current",
+                            value=f"{latest['value']}",
+                            delta=None
                         )
-                    sensor_index += 1
 
-        if readings_to_display_weather:
-            st.subheader("Weather Sensor Readings")
-            col1, col2 = st.columns(2)
-            columns = [col1, col2]
-            sensor_info_weather_api = {
-                "temperature": {"icon": "🌡️", "unit": "°C", "name": "Temperature", "color": "#FF6B6B"},
-                "humidity": {"icon": "💧", "unit": "%", "name": "Humidity", "color": "#4ECDC4"},
-            }
-
-            sensor_index = 0
-
-            for sensor_name, value in readings_to_display_weather.items():
-                if sensor_name in sensor_info_weather_api and sensor_index < len(columns):
-                    info = sensor_info_weather_api[sensor_name]
-                    with columns[sensor_index]:
-                        # Beautiful sensor card
-                        st.markdown(
-                            f"""
-                        <div class="sensor-card" style="border-left: 5px solid {info["color"]};">
-                            <div class="sensor-icon">{info["icon"]}</div>
-                            <div class="sensor-name">{info["name"]}</div>
-                            <div class="sensor-value" style="color: {info["color"]};">
-                                {value:.1f}<span style="font-size: 0.6em; font-weight: 400;">{info["unit"]}</span>
-                            </div>
-                        </div>
-                        """,
-                            unsafe_allow_html=True,
+                        st.caption(
+                            f"Last updated: {latest['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}"
                         )
-                    sensor_index += 1
-            # Display last updated time
-            current_time = datetime.datetime.now().strftime("%H:%M:%S")
-            st.caption(f"📅 Last updated: {current_time} | Auto-refreshes every 5 seconds")
-            st.markdown("---")
 
-        # # Display device status based on filter selections
-        # devices_to_display = []
-        # if st.session_state["show_physical_sensors"]:
-        #     devices_to_display.extend(physical_devices)
-        # if st.session_state["show_weather_sensors"]:
-        #     devices_to_display.extend(weather_devices)
+                        # Alert messages
+                        if color == "red":
+                            st.error("⚠️ Critical value detected!")
+                        elif color == "orange":
+                            st.warning("⚠️ Warning level")
+                        elif color == "blue":
+                            st.info("ℹ️ High moisture / humidity")
 
-        # if devices_to_display:
-        #     st.subheader("📊 Connected Devices")
-        #     status_cols = st.columns(len(devices_to_display))
-        #     for i, device in enumerate(devices_to_display):
-        #         with status_cols[i]:
-        #             device_type_icon = "🌤️" if device.get('type') == 'weather_api' else "📡"
-        #             status_class = "status-online" if device['active'] else "status-offline"
-        #             location = f" ({device['city']})" if device.get('type') == 'weather_api' and device.get('city') else ""
+                        # Mini chart
+                        st.line_chart(
+                            sensor_df.set_index("timestamp")["value"],
+                            height=150
+                        )
 
-        #             st.markdown(f"""
-        #             <div style="text-align: center; padding: 15px; background: rgba(255,255,255,0.05);
-        #              border-radius: 15px; border: 1px solid rgba(255,255,255,0.1);">
-        #                 <div style="font-size: 1.5em; margin-bottom: 8px;">{device_type_icon}</div>
-        #                 <div style="font-size: 0.9em; font-weight: 500; margin-bottom: 8px;">{device['name']}{location}</div>
-        #                 <div style="display: flex; align-items: center; justify-content: center;">
-        #                     <span class="status-indicator {status_class}"></span>
-        #                     <span style="font-size: 0.8em; color: #ccc;">{'Online' if device['active'] else 'Offline'}</span>
-        #                 </div>
-        #             </div>
-        #             """, unsafe_allow_html=True)
-        # else:
-        #     st.info("📡 No sensors selected. Enable Physical Sensors or Weather API above to view device status.")
+        except Exception as e:
+            st.error(f"Error loading sensor readings: {e}")
 
-    def run(self):
-        st.subheader("Home Page")
-
-        # -----------------------
-        # DEVICE MANAGEMENT
-        # -----------------------
+    # ------------------------
+    # Device Management
+    # ------------------------
+    def device_management_section(self):
+        st.subheader("🔌 Device Management")
         is_guest = not self.access_token
 
         if is_guest:
-            st.info("🌟 **Guest Mode**: You can connect sensors and use weather API, but data won't be saved to your account.")
+            st.info("🌟 Guest Mode: Sensor data won't be saved.")
 
-        # Initialize guest devices in session state
+        # Session state
         if "guest_devices" not in st.session_state:
             st.session_state.guest_devices = []
         if "guest_weather_config" not in st.session_state:
             st.session_state.guest_weather_config = None
-        st.subheader("🔌 Device Management")
 
-        # Device registration section
-        with st.expander("➕ Add New Device"):
-            device_name = st.text_input("Device Name", placeholder="e.g., Balcony Sensor Hub or dummy for simulated readings", key="device_name")
-            device_ip = st.text_input("Device IP/Endpoint (optional)", placeholder="192.168.1.100 or dummy for simulated readings", key="device_ip")
+        # ------------------------
+        # Add New Device
+        # ------------------------
+        with st.expander("➕ Add New Device (ESP32 Device)"):
+            device_name = st.selectbox(
+                "🌿 Select the plant connected to the device",
+                self.plant_list,
+                key="device_name"
+            )
+            wifi_ssid = st.text_input("Wi-Fi SSID (ESP only, optional)", key="wifi_ssid")
+            wifi_password = st.text_input("Wi-Fi Password (ESP only, optional)", type="password", key="wifi_password")
 
-            # Available sensors for this device
-            available_sensors = ["temperature", "humidity", "soil_moisture", "soil_ph", "light", "camera"]
-            selected_sensors = st.multiselect("Sensors on this device", available_sensors, key="selected_sensors")
+            if st.button("Register Device", disabled=not device_name):
+                payload = {
+                    "device_name": device_name,
+                    "device_type": "physical",
+                    "wifi_ssid": wifi_ssid if wifi_ssid else None,
+                    "wifi_password": wifi_password if wifi_password else None,
+                }
 
-            if st.button("Register Device", disabled=not device_name or not selected_sensors, key="register_device"):
                 if is_guest:
-                    # For guest users, store in session state
                     guest_device = {
                         "id": f"guest_{len(st.session_state.guest_devices)}",
                         "device_name": device_name,
-                        "ip": device_ip if device_ip else None,
                         "is_active": True,
                         "device_type": "physical",
-                        "device_city": self.city,
-                        "sensor_types": selected_sensors,
+                        "esp_config": {"wifi_ssid": wifi_ssid, "wifi_password": wifi_password} if wifi_ssid else None,
                     }
                     st.session_state.guest_devices.append(guest_device)
-                    st.success(f"✅ Device '{device_name}' connected! Sensor readings will appear below.")
+                    st.success(f"✅ Device '{device_name}' added in Guest Mode.")
                     st.rerun()
                 else:
-                    # For logged-in users, register on server
-                    device_payload = {
-                        "device_name": device_name,
-                        "device_ip": device_ip if device_ip else None,
-                        "device_type": "physical",
-                        "device_city": self.city,
-                        "sensor_types": selected_sensors,
-                    }
-
                     try:
-                        response = DeviceRegister(device_payload=device_payload, headers=self.headers).register()
+                        response = DeviceRegister(device_payload=payload, headers=self.headers).register()
                         if response.status_code == 200:
-                            st.success(f"✅ Device '{device_name}' registered! Sensor readings will appear below.")
-                            st.rerun()  # Refresh to show new device
+                            data = response.json()
+                            st.success("Device Registered Successfully!")
+                            st.info("""📟 Setup Instructions:
+                                1. Flash the BalconyGreen firmware to your ESP32
+                                2. Power on the device
+                                3. Install Balcony Green App  
+                                4. The device will connect to the BalconyGreen backend
+                                """)
+                            manifest_url = data['firmware']['manifest_url']
+                            esp32_flasher(manifest_url)
                         else:
                             st.error(f"Failed to register device: {response.text}")
                     except Exception as e:
-                        st.error(f"Failed to register device: {e}")
+                        st.error(f"Error registering device: {e}")
 
-        # Weather API as virtual device
+        # ------------------------
+        # Weather API Device
+        # ------------------------
         with st.expander("🌤️ Add Weather API Sensors"):
             self.city = st.text_input("City", "London", key="weather_city")
-            weather_sensors = st.multiselect("Weather Parameters", ["temperature", "humidity"], key="weather_sensors")
+            weather_sensors = st.multiselect("Weather Sensors", ["temperature", "humidity"], key="weather_sensors")
 
-            if st.button("Register Weather API", disabled=not weather_sensors, key="register_weather"):
+            if st.button("Register Weather API", disabled=not weather_sensors):
+                payload = {
+                    "device_name": f"Weather API - {self.city}",
+                    "sensor_types": weather_sensors,
+                    "device_type": "weather_api",
+                    "device_ip": None,
+                    "city": self.city,
+                }
                 if is_guest:
-                    # For guest users, store weather config in session state
                     st.session_state.guest_weather_config = {
                         "id": "guest_weather",
                         "name": f"Weather API - {self.city}",
-                        "city": self.city,
-                        "active": True,
                         "type": "weather_api",
+                        "active": True,
                         "sensors": weather_sensors,
+                        "city": self.city,
                     }
-                    st.success(f"✅ Weather API configured for {self.city}! Weather data will appear below.")
+                    st.success(f"✅ Weather API configured for {self.city}.")
                     st.rerun()
                 else:
-                    # For logged-in users, register on server
-                    device_payload = {
-                        "device_name": f"Weather API - {self.city}",
-                        "device_ip": None,  # No IP for weather API
-                        "sensor_types": weather_sensors,
-                        "device_type": "weather_api",
-                        "city": self.city,
-                    }
-
                     try:
-                        response = DeviceRegister(device_payload=device_payload, headers=self.headers).register()
-                        type(response)
-
+                        response = DeviceRegister(device_payload=payload, headers=self.headers).register()
                         if response.status_code == 200:
-                            st.success(f"✅ Weather API registered for {self.city}! Weather data will appear below.")
+                            st.success(f"✅ Weather API registered for {self.city}.")
                             st.rerun()
                         else:
-                            st.error(f"Failed to register weather sensors: {response.text}")
+                            st.error(f"Failed to register weather API: {response.text}")
                     except Exception as e:
-                        st.error(f"Failed to register weather sensors: {e}")
+                        st.error(f"Error registering weather API: {e}")
 
-        # Display registered devices
-        st.subheader("📱 Your Devices")
-
-        # Combine devices from server and session state
+        # ------------------------
+        # Show Connected Devices
+        # ------------------------
+        st.subheader("📱 Connected Devices")
         all_devices = []
-
         if is_guest:
-            # For guest users, use session state devices
             all_devices = st.session_state.guest_devices.copy()
             if st.session_state.guest_weather_config:
                 all_devices.append(st.session_state.guest_weather_config)
         else:
-            # For logged-in users, get from server
             try:
-                devices_response = requests.get(f"{FASTAPI_URL}/devices", headers=self.headers)
-                if devices_response.status_code == 200:
-                    all_devices = devices_response.json()
+                resp = requests.get(f"{FASTAPI_URL}/devices", headers=self.headers, timeout=3)
+                if resp.status_code == 200:
+                    all_devices = resp.json()
             except Exception as e:
                 st.error(f"Failed to load devices: {e}")
-                all_devices = []
 
-        for device in all_devices:
-            if device["name"] == "dummy" and device["active"]:
-                self.simulated = True
         if not all_devices:
-            st.info("No devices connected yet. Add a device or weather API above to start monitoring!")
+            st.info("No devices connected. Add devices above.")
         else:
             for device in all_devices:
-                device_type_icon = "🌤️" if device.get("type") == "weather_api" else "📡"
-                location_info = (
-                    f" ({device['city']})"
-                    if device.get("type") == "weather_api" and device.get("city")
-                    else f" ({device['ip']})"
-                    if device["ip"]
-                    else ""
-                )
-                with st.expander(f"{device_type_icon} {device['name']}{location_info}"):
-                    status_icon = "🟢" if device["active"] else "🔴"
-                    device_type_display = "Weather API" if device.get("type") == "weather_api" else "Physical Device"
-                    st.write(f"**Status:** {status_icon} {'Connected' if device['active'] else 'Disconnected'}")
-                    st.write(f"**Type:** {device_type_display}")
-                    st.write(f"**Sensors:** {', '.join(device['sensors'])}")
+                if device.get("type") != "upload":
+                    device_type_icon = "🌤️" if device.get("type") == "weather_api" else "📡"
+                    location_info = f" ({device.get('city')})" if device.get("type") == "weather_api" else f" ({device.get('ip')})" if device.get("ip") else ""
+                    with st.expander(f"{device_type_icon} {device.get('device_name', device.get('name'))}{location_info}"):
+                        status_icon = "🟢" if device.get("active") else "🔴"
+                        st.write(f"**Status:** {status_icon} {'Connected' if device.get('active') else 'Disconnected'}")
+                        st.write(f"**Type:** {'Weather API' if device.get('type') == 'weather_api' else 'Physical Device'}")
 
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if device.get("type") == "physical" and device.get("ip"):
-                            if st.button("Test Connection", key=f"test_{device['id']}"):
-                                # Test device connectivity
-                                test_result = self.test_device_connection(device.get("ip"))
-                                if test_result:
-                                    st.success("Device is reachable!")
-                                else:
-                                    st.error("Device is not reachable. Check network connection.")
-                        elif device.get("type") == "weather_api" and st.button("Test API", key=f"test_{device['id']}"):
-                            # Test weather API connectivity
-                            try:
-                                test_result = self.test_weather_api(device.get("city", "London"))
-                                if test_result:
-                                    st.success("Weather API is working!")
-                                else:
-                                    st.error("Weather API is not responding.")
-                            except Exception as e:
-                                st.error(f"Weather API test failed: {e}")
-
-                    with col2:
-                        if st.button("Remove Device", key=f"remove_{device['id']}"):
-                            if is_guest:
-                                # For guest users, remove from session state
-                                if device.get("type") == "weather_api":
-                                    st.session_state.guest_weather_config = None
-                                else:
-                                    st.session_state.guest_devices = [d for d in st.session_state.guest_devices if d["id"] != device["id"]]
-                                st.success(f"Device '{device['name']}' removed!")
-                                st.rerun()
-                            else:
-                                # For logged-in users, remove from server
-                                try:
-                                    delete_response = requests.delete(f"{FASTAPI_URL}/devices/{device['id']}", headers=self.headers)
-                                    remove_device(device["id"])
-                                    if delete_response.status_code == 200:
-                                        st.success(f"Device '{device['name']}' removed successfully!")
-                                        st.rerun()
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if device.get("type") == "physical" and device.get("ip"):
+                                if st.button("Test Connection", key=f"test_{device['id']}"):
+                                    from subprocess import run, PIPE
+                                    result = run(["ping", "-n" if os.name=="nt" else "-c", "1", device.get("ip")], stdout=PIPE)
+                                    if result.returncode == 0:
+                                        st.success("Device reachable!")
                                     else:
-                                        st.error(f"Failed to remove device: {delete_response.text}")
-                                except Exception as e:
-                                    st.error(f"Failed to remove device: {e}")
+                                        st.error("Device unreachable.")
+                            elif device.get("type") == "weather_api":
+                                if st.button("Test API", key=f"test_{device['id']}"):
+                                    try:
+                                        r = requests.get(f"https://geocoding-api.open-meteo.com/v1/search?name={device.get('city')}", timeout=3)
+                                        if r.status_code == 200 and "results" in r.json():
+                                            st.success("Weather API working!")
+                                        else:
+                                            st.error("Weather API failed.")
+                                    except Exception as e:
+                                        st.error(f"Weather API test failed: {e}")
 
-        # -----------------------
-        # LIVE SENSOR READINGS
-        # -----------------------
-        # Check if user has registered devices or weather API
-        has_devices = False
-        has_weather_api = False
+                        with col2:
+                            # Activate device (only for physical + logged-in)
+                            if device.get("type") == "physical" and self.access_token:
+                                if st.button("Activate Device", key=f"activate_{device['id']}"):
+                                    try:
+                                        resp = requests.post(f"{FASTAPI_URL}/devices/{device['id']}/activate",
+                                                            headers=self.headers, timeout=3)
+                                        if resp.status_code == 200:
+                                            st.success("✅ Device activated successfully!")
+                                        else:
+                                            st.error(f"Activation failed: {resp.text}")
+                                    except Exception as e:
+                                        st.error(f"Activation error: {e}")
 
-        if is_guest:
-            # For guest users, check session state
-            has_devices = len(st.session_state.guest_devices) > 0
-            has_weather_api = st.session_state.guest_weather_config is not None
-        else:
-            # For logged-in users, check server
-            try:
-                devices_response = requests.get(f"{FASTAPI_URL}/devices", headers=self.headers, timeout=3)
-                if devices_response.status_code == 200:
-                    devices = devices_response.json()
-                    has_devices = len(devices) > 0
-                    # Check if any device is weather API
-                    has_weather_api = any(device.get("type") == "weather_api" for device in devices)
-            except requests.RequestException:
-                pass
+                        # Remove device
+                            if st.button("Remove Device", key=f"remove_{device['id']}"):
+                                if is_guest:
+                                    if device.get("type") == "weather_api":
+                                        st.session_state.guest_weather_config = None
+                                    else:
+                                        st.session_state.guest_devices = [d for d in st.session_state.guest_devices if d["id"] != device["id"]]
+                                    st.success(f"Device '{device.get('device_name', device.get('name'))}' removed!")
+                                    st.rerun()
+                                else:
+                                    try:
+                                        requests.delete(f"{FASTAPI_URL}/devices/{device['id']}", headers=self.headers, timeout=3)
+                                        remove_device(device["id"])
+                                        st.success(f"Device removed from backend!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Failed to remove device: {e}")
 
-        if has_devices or has_weather_api:
-            st.subheader("🌡️ Live Sensor Readings")
-            self.display_sensor_readings()
-        else:
-            st.info("📡 No devices or weather API configured yet. Add a device or configure weather API above to start monitoring!")
 
-        # -----------------------
-        # IMAGE INPUT
-        # -----------------------
 
-        image = self.image_input.render()
+    
 
-        if image and st.session_state["page_func"] == "Home":
-            st.session_state["uploaded_image"] = image
-            predicted_plant = self.predict_plant(image)
-            st.session_state["predicted_plant"] = predicted_plant
-            if st.button("Predict & Go to Plant Page"):
-                st.session_state["page_func"] = "PlantPage"
+    def live_sensor_dashboard(self):
+        st.subheader("📡 Live Sensor Dashboard")
 
-        # -----------------------
-        # PLANT PAGE
-        # -----------------------
+        if "run_live" not in st.session_state:
+            st.session_state.run_live = False
 
-        elif st.session_state.get("page_func") == "PlantPage":
-            plant_name = st.session_state.get("predicted_plant", "Unknown")
-            uploaded_image = st.session_state.get("uploaded_image", None)
+        col1, col2 = st.columns(2)
 
-            st.header(f"🧠 {plant_name} Health & Analytics")
+        if col1.button("▶ Start Live"):
+            st.session_state.run_live = True
 
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                st.subheader("🌱 Plant Image")
-                if uploaded_image:
-                    st.image(uploaded_image, width=300)
-                else:
-                    st.write("No image available")
+        if col2.button("⏹ Stop"):
+            st.session_state.run_live = False
 
-            with col2:
-                st.subheader("Prediction")
-                st.write(f"Predicted Plant: **{plant_name}**")
-                st.write("Confidence: 92%")  # placeholder
-                st.subheader("🧠 Health Prediction")
-                if uploaded_image:
-                    health_status = False
-                    results_1, results_2 = self.predict_tomato_image(uploaded_image)
-                    for r in results_2:
-                        if r["confidence"] * 100 > 80:
-                            health_status = True
-                            st.success(f"{r['class_name']}")
-                    if health_status and st.button("Possible Disease Type"):
-                        for r in results_1:
-                            st.success(f"{r['class_name']} — {r['confidence'] * 100:.6f}%")
+        placeholder = st.empty()
 
-            st.divider()
-            st.subheader("📊 Live Sensor Data")
+        if st.session_state.run_live:
+            while st.session_state.run_live:
+                with placeholder.container():
+                    self.display_sensor_readings()
 
-            # Display beautiful sensor readings
-            self.display_sensor_readings()
+                time.sleep(5)
+                st.rerun()
+    # ------------------------
+    # Run Main Page
+    # ------------------------
+    def run(self):
+        
+        col1 , col2 = st.columns(2)
 
-            if st.button("⬅ Back to Home"):
-                st.session_state["page_func"] = "Home"
-                st.session_state["predicted_plant"] = None
+        with col1:
+
+            col1.subheader("Upload Image for Leaf Disease Detection")
+            # Image input for plant prediction
+            device_name = st.selectbox(
+                "🌿 Select the plant that is being uploaded",
+                self.plant_list,
+                key="plant_name"
+            )
+
+            payload = {
+                    "device_name": device_name,
+                    "device_type": "upload",
+                }
+            image = self.image_input.render(payload, self.headers, device_name)
+            if image and st.session_state["page_func"] == "Home":
+                st.session_state["uploaded_image"] = image
+                
+        
+        with col2:
+
+            col2.subheader("Add Device for Monitoring Plant ")
+            self.device_management_section()
+            self.live_sensor_dashboard()
+                
+
+        
 
 
 # =========================
-# ENTRY POINT
+# Entry Point
 # =========================
-def main_page(access: str):
+def main_page(access: str | None):
     BalconyGreenApp(access_token=access).run()

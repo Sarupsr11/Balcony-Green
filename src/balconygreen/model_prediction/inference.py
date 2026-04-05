@@ -6,9 +6,6 @@ import torch  # type: ignore
 from PIL import Image  # type: ignore
 from torchvision import transforms  # type: ignore
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-CKPT_PATH = PROJECT_ROOT / "disease-detection" / "Tomatoes" / "Models" / "efficientnet_binary_best_multiple_sources.pth"
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

@@ -1,46 +1,117 @@
-# ruff: noqa: B008
-
-import logging
+import os
 import uuid
+import logging
+import subprocess
+import shutil
+import socket
+import json
+
 from datetime import datetime, timedelta, timezone
+from typing import List, Optional
+from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException  # type: ignore
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, OAuth2PasswordBearer  # type: ignore
-from jose import JWTError, jwt  # type: ignore
-from pydantic import BaseModel  # type: ignore
+from fastapi import ( # type: ignore
+    FastAPI,
+    Depends,
+    HTTPException,
+    File,
+    UploadFile,
+    BackgroundTasks
+)
 
-from balconygreen.db_implementation.db_general import Database
-from balconygreen.user_service import UserService
+from fastapi.responses import FileResponse # type: ignore
+from fastapi.security import OAuth2PasswordBearer, HTTPAuthorizationCredentials, HTTPBearer # type: ignore
+from fastapi.middleware.cors import CORSMiddleware # type: ignore
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+from jose import JWTError, jwt # type: ignore
+from pydantic import BaseModel # type: ignore
+from sqlalchemy.orm import Session # type: ignore
 
-# ============================================================
-# CONFIG
-# ============================================================
+from balconygreen.db_implementation.db_general import SessionLocal
+from balconygreen.db_implementation.schema.users import User
+from balconygreen.db_implementation.schema.devices import Device
+from balconygreen.db_implementation.schema.sensor import Sensor
+from balconygreen.db_implementation.schema.reading import Reading
+from balconygreen.db_implementation.schema.image import Image
 
-SECRET_KEY = "CHANGE_ME_TO_ENV_SECRET"
+from balconygreen.utils import hash_password, verify_password
+
+
+# ======================
+# Logging
+# ======================
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("balconygreen")
+
+
+# ======================
+# Configuration
+# ======================
+
+SECRET_KEY = os.getenv("SECRET_KEY", "CHANGE_ME")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
-DB_PATH = "balcony.db"
+
+
+# Use the LAN IP for your backend URL
+BASE_URL = ""
+
+logger.info(f"LAN: {BASE_URL}")
+
+
+# ======================
+# FastAPI
+# ======================
+
+app = FastAPI(title="BalconyGreen API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 device_scheme = HTTPBearer(auto_error=False)
 
-app = FastAPI(title="Balcony Green API")
 
-database = Database(DB_PATH)
-user_service = UserService(DB_PATH)
+# ======================
+# Storage
+# ======================
 
-# ============================================================
-# MODELS
-# ============================================================
+FIRMWARE_DIR = Path("firmware_bins")
+IMAGE_DIR = Path("images")
 
+FIRMWARE_DIR.mkdir(exist_ok=True, parents=True)
+IMAGE_DIR.mkdir(exist_ok=True, parents=True)
+
+
+# ======================
+# Database
+# ======================
+
+def get_db():
+    logging.info("Initializing the Database ")
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+
+# ======================
+# Models
+# ======================
 
 class SignupRequest(BaseModel):
     email: str
     password: str
-    name: str | None = None
+    name: Optional[str]
 
 
 class LoginRequest(BaseModel):
@@ -55,239 +126,543 @@ class TokenResponse(BaseModel):
 
 class DeviceRegistration(BaseModel):
     device_name: str
-    device_ip: str | None = None
-    sensor_types: list[str]
     device_type: str = "physical"
-    city: str | None = None
+    city: Optional[str] = None
+    device_ip: Optional[str] = None
+    wifi_ssid: Optional[str] = None
+    wifi_password: Optional[str] = None
 
 
 class SensorReading(BaseModel):
     sensor_id: str
     value: float
-    unit: str | None = None
-    source: str = "sensor"
-    timestamp: datetime | None = None
+    unit: Optional[str] = None
+    sensor_name: str = "sensor"
+    timestamp: Optional[datetime] = None
 
 
-# ============================================================
-# JWT SERVICE (USERS ONLY)
-# ============================================================
+class DeviceActivation(BaseModel):
+    device_key: str
 
+
+# ======================
+# JWT Service
+# ======================
 
 class JWTService:
+
     @staticmethod
     def create_token(user_id: str):
         payload = {
             "sub": user_id,
-            "exp": datetime.now(tz=timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+            "exp": datetime.now(timezone.utc)
+            + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         }
         return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
     @staticmethod
     def verify_token(token: str):
+
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             return payload["sub"]
+
         except JWTError:
-            raise HTTPException(status_code=401, detail="Invalid or expired token") from None
+            raise HTTPException(status_code=401, detail="Invalid token")
 
 
-# ============================================================
-# AUTH DEPENDENCIES
-# ============================================================
+# ======================
+# Auth Dependencies
+# ======================
 
+def get_current_user(
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme)
+):
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
     user_id = JWTService.verify_token(token)
-    user = user_service.get_user_by_id(user_id)
+
+    user = db.query(User).filter(User.id == user_id).first()
+
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    return {
-        "id": user_id,
-        "email": user[1],
-        "name": user[2],
-        "type": "user",
-    }
+
+    return user
 
 
 def get_current_device(
-    creds: HTTPAuthorizationCredentials = Depends(device_scheme),
+    db: Session = Depends(get_db),
+    creds: HTTPAuthorizationCredentials = Depends(device_scheme)
 ):
+
     if not creds:
         raise HTTPException(status_code=401, detail="Device token required")
 
     device_key = creds.credentials
-    device = database.fetch_one(
-        "SELECT id, is_active FROM devices WHERE device_key = ?",
-        (device_key,),
-    )
-    if not device or not device["is_active"]:
-        raise HTTPException(status_code=401, detail="Invalid or inactive device")
 
-    # heartbeat: update last_seen
-    database.execute(
-        "UPDATE devices SET last_seen = CURRENT_TIMESTAMP WHERE id = ?",
-        (device["id"],),
-    )
+    device = db.query(Device).filter(Device.device_key == device_key).first()
 
-    return {"id": device["id"], "type": "device"}
+    if not device or not device.is_active:
+        raise HTTPException(status_code=401, detail="Invalid device")
+
+    device.last_seen = datetime.now(timezone.utc)
+    db.commit()
+
+    return device
 
 
-# ============================================================
-# USER AUTH ENDPOINTS
-# ============================================================
-
+# ======================
+# Auth Endpoints
+# ======================
 
 @app.post("/auth/signup")
-def signup(data: SignupRequest):
-    user_service.create_user(data.email, data.password, data.name)
-    return {"message": "User created"}
+def signup(data: SignupRequest, db: Session = Depends(get_db)):
+
+    if db.query(User).filter(User.email == data.email).first():
+        raise HTTPException(400, "Email already exists")
+
+    user = User(
+        email=data.email,
+        name=data.name,
+        password_hash=hash_password(data.password)
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return {"user_id": user.id}
 
 
 @app.post("/auth/login", response_model=TokenResponse)
-def login(data: LoginRequest):
-    user = user_service.get_user(data.email)
-    if not user:
+def login(data: LoginRequest, db: Session = Depends(get_db)):
+
+    user = db.query(User).filter(User.email == data.email).first()
+
+    if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(401, "Invalid credentials")
 
-    user_id, _, hashed_pw = user
-    if not user_service.verify_password(data.password, hashed_pw):
-        raise HTTPException(401, "Invalid credentials")
+    token = JWTService.create_token(user.id)
 
-    token = JWTService.create_token(user_id)
     return {"access_token": token}
 
 
-# ============================================================
-# DEVICE MANAGEMENT (USER ONLY)
-# ============================================================
 
+
+
+# ======================
+# Device Registration
+# ======================
 
 @app.post("/register_device")
-async def register_device(
+def register_device(
     device: DeviceRegistration,
-    user=Depends(get_current_user),
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
+    # Generate unique device ID and key
     device_id = str(uuid.uuid4())
     device_key = str(uuid.uuid4())
 
-    database.execute(
-        """
-        INSERT INTO devices
-        (id, user_id, device_name, device_ip, device_key, device_type, city, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-        """,
-        (device_id, user["id"], device.device_name, device.device_ip, device_key, device.device_type, device.city),
+    # Create device record in DB (no sensors yet)
+    db_device = Device(
+        id=device_id,
+        user_id=user.id,
+        device_type = device.device_type,
+        device_name=device.device_name,
+        device_key=device_key,
+        city=device.city,
+        is_active=True
     )
+    db.add(db_device)
+    db.commit()
 
-    # Generate sensor IDs and return sensor map
-    sensor_map: dict[str, str] = {}
-    for sensor_name in device.sensor_types:
-        sensor_id = str(uuid.uuid4())
-        sensor_map[sensor_name] = sensor_id
-        database.execute(
-            "INSERT INTO sensors (id, device_id, sensor_name, sensor_type) VALUES (?, ?, ?, ?)",
-            (sensor_id, device_id, sensor_name, sensor_name),
+    # Schedule firmware generation
+    if device.device_type != "upload":
+        background_tasks.add_task(
+            generate_firmware,
+            device_id=device_id,
+            device_key=device_key,
+            wifi_ssid=device.wifi_ssid or "",
+            wifi_password=device.wifi_password or "",
+            backend_url=BASE_URL
         )
 
     return {
-        "status": "success",
         "device_id": device_id,
-        "device_key": device_key,  # store locally on device
-        "sensor_map": sensor_map,  # store locally on device
-        "device_type": device.device_type,
+        "device_key": device_key,
+        "firmware": {
+            "bin_url": f"{BASE_URL}/firmware/{device_id}/firmware.bin",
+            "manifest_url": f"{BASE_URL}/firmware/{device_id}/manifest.json"
+        },
+        "wifi_ssid": device.wifi_ssid,
+        "wifi_password": device.wifi_password
     }
 
 
-@app.get("/devices")
-async def get_devices(user=Depends(get_current_user)):
-    rows = database.fetch_all(
-        """
-        SELECT d.id, d.device_name, d.device_ip, d.is_active,
-               d.device_type, d.city,
-               GROUP_CONCAT(s.sensor_name) AS sensors
-        FROM devices d
-        LEFT JOIN sensors s ON d.id = s.device_id
-        WHERE d.user_id = ?
-        GROUP BY d.id
-        """,
-        (user["id"],),
-    )
 
-    return [
-        {
-            "id": r["id"],
-            "name": r["device_name"],
-            "ip": r["device_ip"],
-            "active": bool(r["is_active"]),
-            "type": r["device_type"],
-            "city": r["city"],
-            "sensors": r["sensors"].split(",") if r["sensors"] else [],
-        }
-        for r in rows
-    ]
+
+
+@app.get("/firmware/{device_id}/manifest.json")
+def firmware_manifest(device_id: str):
+
+    device_dir = FIRMWARE_DIR / device_id
+
+    if not device_dir.exists():
+        raise HTTPException(404, "Firmware not ready")
+
+    return {
+        "name": "BalconyGreen Sensor Device",
+        "builds": [
+            {
+                "chipFamily": "ESP32",
+                "parts": [
+                    {"path": f"{BASE_URL}/firmware/{device_id}/bootloader.bin", "offset": 4096},
+                    {"path": f"{BASE_URL}/firmware/{device_id}/partitions.bin", "offset": 32768},
+                    {"path": f"{BASE_URL}/firmware/{device_id}/firmware.bin", "offset": 65536}
+                ]
+            }
+        ]
+    }
+
+
+# ======================
+# Firmware Endpoints
+# ======================
+
+
+
+@app.get("/firmware_status/{device_id}")
+def firmware_status(device_id: str):
+
+    firmware = FIRMWARE_DIR / device_id / "firmware.bin"
+
+    if firmware.exists():
+        return {"status": "ready"}
+
+    return {"status": "building"}
+
+
+@app.get("/firmware/{device_id}/{filename}")
+def get_firmware_file(device_id: str, filename: str):
+
+    file_path = FIRMWARE_DIR / device_id / filename
+
+    if not file_path.exists():
+        raise HTTPException(404, "Firmware file not found")
+
+    return FileResponse(file_path)
+
+
+
+# ======================
+# Firmware Build
+# ======================
+
+def escape_for_macro(s):
+    return f'\\"{s}\\"'  # escape inner quotes
+
+def generate_firmware(
+    device_id,
+    device_key,
+    wifi_ssid,
+    wifi_password,
+    backend_url
+):
+
+    try:
+
+        logger.info(f"Building firmware for {device_id}")
+
+
+        # Build flags for PlatformIO
+        build_flags = [
+            f'-DWIFI_SSID="{escape_for_macro(wifi_ssid)}"',
+            f'-DWIFI_PASSWORD="{escape_for_macro(wifi_password)}"',
+            f'-DDEVICE_KEY="{escape_for_macro(device_key)}"',
+            f'-DDEVICE_ID"={escape_for_macro(device_id)}"',
+            f'-DBACKEND_URL="{escape_for_macro(backend_url)}"'
+        ]
+        env = os.environ.copy()
+        env["PLATFORMIO_BUILD_FLAGS"] = " ".join(build_flags)
+
+        subprocess.run(
+            ["pio", "run"],
+            cwd="ESP_module",
+            env=env,
+            check=True
+        )
+
+        device_dir = FIRMWARE_DIR / device_id
+        device_dir.mkdir(exist_ok=True, parents=True)
+
+        shutil.copy("ESP_module/.pio/build/esp32dev/bootloader.bin", device_dir / "bootloader.bin")
+        shutil.copy("ESP_module/.pio/build/esp32dev/partitions.bin", device_dir / "partitions.bin")
+        shutil.copy("ESP_module/.pio/build/esp32dev/firmware.bin", device_dir / "firmware.bin")
+
+        logger.info(f"Firmware built for {device_id}")
+
+    except Exception as e:
+        logger.error(f"Firmware build failed: {e}")
+
+# ======================
+# Devices
+# ======================
+
+@app.get("/devices")
+def get_devices(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+
+    devices = db.query(Device).filter(Device.user_id == user.id).all()
+
+    results = []
+
+    for d in devices:
+
+        sensors = db.query(Sensor).filter(Sensor.device_id == d.id).all()
+
+        results.append({
+            "id": d.id,
+            "name": d.device_name,
+            "ip": d.device_ip,
+            "type": d.device_type,
+            "active": d.is_active,
+            "type": d.device_type,
+            "city": d.city,
+            "sensors": [
+                {
+                    "id": s.id,
+                    "name": s.sensor_name
+                }
+                for s in sensors
+            ]
+        })
+
+    return results
 
 
 @app.delete("/devices/{device_id}")
-async def remove_device(device_id: str, user=Depends(get_current_user)):
-    database.execute("DELETE FROM sensors WHERE device_id = ?", (device_id,))
-    database.execute("DELETE FROM devices WHERE id = ? AND user_id = ?", (device_id, user["id"]))
+def remove_device(device_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+
+    device = db.query(Device).filter(
+        Device.id == device_id,
+        Device.user_id == user.id
+    ).first()
+
+    if device:
+        db.delete(device)
+        db.commit()
+
     return {"status": "success"}
 
 
-# ============================================================
-# SENSOR INGESTION (DEVICE ONLY)
-# ============================================================
+# ======================
+# Sensor Readings
+# ======================
+
+
+@app.post("/device/sync_sensors")
+def sync_sensors(
+    payload: dict,
+    device: Device = Depends(get_current_device),  # 🔐 secure auth
+    db: Session = Depends(get_db)
+):
+    try:
+        sensors = payload.get("sensors", [])
+
+        if not sensors:
+            raise HTTPException(status_code=400, detail="No sensors provided")
+
+        result = {}
+
+        for sensor_name in sensors:
+
+            # Normalize sensor type
+            sensor_name = sensor_name.strip().lower()
+
+            # Check if sensor already exists for this device
+            existing = db.query(Sensor).filter(
+                Sensor.device_id == device.id,
+                Sensor.sensor_name == sensor_name
+            ).first()
+
+            if existing:
+                sensor_id = existing.id
+            else:
+                sensor_id = str(uuid.uuid4())
+
+                new_sensor = Sensor(
+                    id=sensor_id,
+                    device_id=device.id,
+                    sensor_name=sensor_name
+                )
+
+                db.add(new_sensor)
+                db.commit()
+
+            result["sensor_id"] = sensor_id
+
+        return result
+
+    except Exception as e:
+        print("SYNC ERROR:", str(e))
+        raise HTTPException(status_code=500, detail="Sensor sync failed")
+    
 
 
 @app.post("/sensor_readings")
-async def save_sensor_reading(
+def save_sensor_reading(
     reading: SensorReading,
-    device=Depends(get_current_device),
+    device: Device = Depends(get_current_device),
+    db: Session = Depends(get_db)
 ):
+
     timestamp = reading.timestamp or datetime.now(timezone.utc)
 
-    database.execute(
-        """
-        INSERT INTO readings
-        (device_id, sensor_id, value, source, timestamp)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (device["id"], reading.sensor_id, reading.value, reading.source, timestamp),
+    db_reading = Reading(
+        device_id=device.id,
+        sensor_id=reading.sensor_id,
+        value=reading.value,
+        sensor_name=reading.sensor_name,
+        timestamp=timestamp
     )
 
-    return {
-        "status": "success",
-        "device_id": device["id"],
-        "timestamp": timestamp,
-    }
+    db.add(db_reading)
+    db.commit()
 
-
-# ============================================================
-# READINGS (USER ONLY)
-# ============================================================
+    return {"status": "success"}
 
 
 @app.get("/readings")
-async def get_readings(user=Depends(get_current_user)):
-    rows = database.fetch_all(
-        """
-        SELECT s.sensor_name, r.value, r.timestamp, r.source
-        FROM readings r
-        JOIN sensors s ON r.sensor_id = s.id
-        JOIN devices d ON r.device_id = d.id
-        WHERE d.user_id = ?
-        ORDER BY r.timestamp DESC
-        """,
-        (user["id"],),
+def get_readings(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+
+    readings = (
+        db.query(Reading, Sensor)
+        .join(Sensor, Reading.sensor_id == Sensor.id)
+        .join(Device, Reading.device_id == Device.id)
+        .filter(Device.user_id == user.id)
+        .order_by(Reading.timestamp.desc())
+        .all()
     )
 
     return [
         {
-            "sensor_name": r["sensor_name"],
-            "value": r["value"],
-            "timestamp": r["timestamp"],
-            "source": r["source"],
+            "sensor_name": sensor.sensor_name,
+            "value": reading.value,
+            "timestamp": reading.timestamp,
+            "sensor_name": reading.sensor_name
         }
-        for r in rows
+        for reading, sensor in readings
     ]
+
+
+# ======================
+# Camera Upload
+# ======================
+
+from fastapi import UploadFile, File, Form, HTTPException # type: ignore
+import tempfile
+import shutil
+from balconygreen.model_prediction.models import get_model
+
+@app.post("/camera/upload/{sensor_id}")
+async def upload_camera_image(
+    sensor_id: str,
+    file: UploadFile = File(...),
+    plant: str = Form(...),                  # ✅ REQUIRED
+    mode: str = Form("binary"),              # ✅ binary or disease
+    device: Device = Depends(get_current_device),
+    db: Session = Depends(get_db)
+):
+    try:
+        # ---------------------------
+        # Validate sensor
+        # ---------------------------
+        sensor = db.query(Sensor).filter(
+            Sensor.id == sensor_id,
+            Sensor.device_id == device.id
+        ).first()
+
+        if not sensor:
+            raise HTTPException(404, "Sensor not found")
+
+        # ---------------------------
+        # Validate file
+        # ---------------------------
+        if not file.content_type.startswith("image/"):
+            raise HTTPException(400, "File must be an image")
+
+        # ---------------------------
+        # Save image
+        # ---------------------------
+        sensor_folder = IMAGE_DIR / f"sensor_{sensor_id}"
+        sensor_folder.mkdir(exist_ok=True, parents=True)
+
+        timestamp = datetime.now(timezone.utc)
+        filename = timestamp.strftime("%Y-%m-%d_%H-%M-%S") + ".jpg"
+        file_path = sensor_folder / filename
+
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # ---------------------------
+        # Run prediction
+        # ---------------------------
+        model = get_model(plant, mode)
+
+        results = model.predict(
+            str(file_path),
+            top_k=3,
+            confidence_threshold=0.1
+        )
+
+        # ---------------------------
+        # Format prediction
+        # ---------------------------
+        if mode == "binary":
+            best = results[0]
+            prediction = best["class_name"]
+            confidence = round(best["confidence"] * 100, 2)
+            prediction_data = {
+                "prediction": prediction,
+                "confidence": confidence
+            }
+
+        else:
+            prediction_data = {
+                "predictions": [
+                    {
+                        "disease": r["class_name"],
+                        "confidence": round(r["confidence"] * 100, 2)
+                    }
+                    for r in results
+                ]
+            }
+
+        # ---------------------------
+        # Save to DB
+        # ---------------------------
+        db_image = Image(
+            device_id=device.id,
+            sensor_id=sensor_id,
+            image_path=str(file_path),
+            source="camera",
+            timestamp=timestamp,
+            prediction=json.dumps(prediction_data)  # ✅ store prediction
+        )
+
+        db.add(db_image)
+        db.commit()
+
+        # ---------------------------
+        # Return response
+        # ---------------------------
+        return {
+            "status": "success",
+            "plant": plant,
+            **prediction_data
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

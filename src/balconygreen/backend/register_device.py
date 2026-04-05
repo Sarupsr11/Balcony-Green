@@ -5,7 +5,8 @@ from pathlib import Path
 
 import requests  # type: ignore
 
-FASTAPI_URL = "http://127.0.0.1:8000"
+FASTAPI_URL =  os.getenv("BACKEND_URL","http://localhost:8000")
+
 
 DEVICE_DIR = Path("device_data/devices")
 DEVICE_DIR.mkdir(parents=True, exist_ok=True)
@@ -27,7 +28,7 @@ class DeviceRegister:
                 f"{FASTAPI_URL}/register_device",
                 json=self.device_payload,
                 headers=self.headers,
-                timeout=10,
+                timeout=1200,
             )
 
             if response.status_code != 200:

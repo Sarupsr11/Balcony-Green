@@ -20,7 +20,7 @@ def main():
     logger.info("🌱 Sensor worker started")
 
     try:
-        sensor_reader = SensorReader(use_simulated=True, api_key=api_key)
+        sensor_reader = SensorReader(use_simulated=False, api_key=api_key)
         logger.info("SensorReader initialized successfully")
         sensor_reader.run_forever()
     except Exception as e:

@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  backend:
+    volumes:
+      - ../../src/balconygreen:/app/balconygreen
+      - ../../device_data/devices:/app/device_data/devices
+      - ../../src/balconygreen/ESP_module:/app/ESP_module
+    
+
+  frontend:
+    volumes:
+      - ../../src/balconygreen:/app/balconygreen
+      - ../../device_data/devices:/app/device_data/devices
+    command: >
+      python -m streamlit run balconygreen/frontend/login_page.py
+
+  worker:
+    volumes:
+      - ../../src/balconygreen:/app/balconygreen
+      - ../../device_data/devices:/app/device_data/devices

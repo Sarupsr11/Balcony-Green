@@ -1,6 +1,6 @@
 # auth_ui_oop_fixed.py
 import logging
-
+import os
 import requests  # type: ignore
 import streamlit as st  # type: ignore
 from streamlit_cookies_manager import EncryptedCookieManager  # type: ignore
@@ -8,7 +8,8 @@ from streamlit_cookies_manager import EncryptedCookieManager  # type: ignore
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-API_URL = "http://localhost:8000"
+API_URL = os.getenv("BACKEND_URL","http://localhost:8000")
+
 
 # -------------------------
 # Cookies
@@ -160,6 +161,7 @@ class Pages:
                 st.rerun()
 
             else:
+                print(r)
                 st.error(r.json().get("detail", "Signup failed"))
                 st.rerun()
 
@@ -171,9 +173,9 @@ class Pages:
     # Dashboard Page
     # -------------------------
     def dashboard(self):
-        from home_page import main_page
+        from balconygreen.frontend.home_page import main_page
 
-        main_page(access=None if st.session_state.get("guest", False) else st.session_state["access_token"])
+        main_page(st.session_state["access_token"])
 
         if st.session_state.get("guest", False):
             if st.button("🔹 Sign in option", key="guest_btn"):

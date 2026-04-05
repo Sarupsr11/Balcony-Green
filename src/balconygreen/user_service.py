@@ -1,22 +1,26 @@
+# Additional file if sqlite is used
+
+
+
 import logging
 import sqlite3
 import uuid
 
 from fastapi import HTTPException  # type: ignore
-from passlib.context import CryptContext  # type: ignore
-
+# from passlib.context import CryptContext  # type: ignore
+from utils import hash_password, verify_password
 # -------------------------
 # Config
 # -------------------------
 SECRET_KEY = "CHANGE_ME_TO_ENV_SECRET"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
-DB_PATH = "balcony.db"
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # -------------------------
@@ -32,11 +36,11 @@ class UserService:
 
     def hash_password(self, password: str):
         logger.debug("Hashing password")
-        return pwd_context.hash(password)
+        return hash_password(password)
 
     def verify_password(self, password: str, hashed: str) -> bool:
         logger.debug("Verifying password")
-        result = pwd_context.verify(password, hashed)
+        result = verify_password(password, hashed)
         logger.debug(f"Password verification result: {result}")
         return result
 
