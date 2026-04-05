@@ -6,7 +6,7 @@ from PIL import Image # type: ignore
 from balconygreen.backend.register_device import DeviceRegister
 import os
 
-FASTAPI_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+FASTAPI_URL = os.getenv("FASTAPI_URL", "https://balconygreen-production.up.railway.app")
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

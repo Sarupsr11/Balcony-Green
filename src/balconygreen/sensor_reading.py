@@ -10,7 +10,7 @@ import os
 import numpy as np  # type: ignore
 import requests  # type: ignore
 
-FASTAPI_URL =  os.getenv("BACKEND_URL","http://localhost:8000")
+FASTAPI_URL =  os.getenv("FASTAPI_URL","https://balconygreen-production.up.railway.app")
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

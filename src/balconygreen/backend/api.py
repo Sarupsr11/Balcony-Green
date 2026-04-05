@@ -387,7 +387,7 @@ def generate_firmware(
             f'-DWIFI_SSID="{escape_for_macro(wifi_ssid)}"',
             f'-DWIFI_PASSWORD="{escape_for_macro(wifi_password)}"',
             f'-DDEVICE_KEY="{escape_for_macro(device_key)}"',
-            f'-DDEVICE_ID"={escape_for_macro(device_id)}"',
+            f'-DDEVICE_ID="{escape_for_macro(device_id)}"',
             f'-DBACKEND_URL="{escape_for_macro(backend_url)}"'
         ]
         env = os.environ.copy()
@@ -395,7 +395,7 @@ def generate_firmware(
 
         subprocess.run(
             ["pio", "run"],
-            cwd="ESP_module",
+            cwd="balconygreen/ESP_module",
             env=env,
             check=True
         )
@@ -403,9 +403,9 @@ def generate_firmware(
         device_dir = FIRMWARE_DIR / device_id
         device_dir.mkdir(exist_ok=True, parents=True)
 
-        shutil.copy("ESP_module/.pio/build/esp32dev/bootloader.bin", device_dir / "bootloader.bin")
-        shutil.copy("ESP_module/.pio/build/esp32dev/partitions.bin", device_dir / "partitions.bin")
-        shutil.copy("ESP_module/.pio/build/esp32dev/firmware.bin", device_dir / "firmware.bin")
+        shutil.copy("balconygreen/ESP_module/.pio/build/esp32dev/bootloader.bin", device_dir / "bootloader.bin")
+        shutil.copy("balconygreen/ESP_module/.pio/build/esp32dev/partitions.bin", device_dir / "partitions.bin")
+        shutil.copy("balconygreen/ESP_module/.pio/build/esp32dev/firmware.bin", device_dir / "firmware.bin")
 
         logger.info(f"Firmware built for {device_id}")
 
