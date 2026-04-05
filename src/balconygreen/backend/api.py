@@ -393,8 +393,7 @@ def generate_firmware(
         env = os.environ.copy()
         env["PLATFORMIO_BUILD_FLAGS"] = " ".join(build_flags)
 
-        base_path = Path(__file__).parent.resolve()
-        esp_module_path = base_path / "balconygreen" / "ESP_module"
+        esp_module_path = Path("/app/balconygreen/ESP_module")
         subprocess.run(
             ["pio", "run"],
             cwd=esp_module_path,
