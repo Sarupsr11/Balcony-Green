@@ -393,9 +393,11 @@ def generate_firmware(
         env = os.environ.copy()
         env["PLATFORMIO_BUILD_FLAGS"] = " ".join(build_flags)
 
+        base_path = Path(__file__).parent.resolve()
+        esp_module_path = base_path / "balconygreen" / "ESP_module"
         subprocess.run(
             ["pio", "run"],
-            cwd="balconygreen/ESP_module",
+            cwd=esp_module_path,
             env=env,
             check=True
         )
@@ -403,9 +405,9 @@ def generate_firmware(
         device_dir = FIRMWARE_DIR / device_id
         device_dir.mkdir(exist_ok=True, parents=True)
 
-        shutil.copy("balconygreen/ESP_module/.pio/build/esp32dev/bootloader.bin", device_dir / "bootloader.bin")
-        shutil.copy("balconygreen/ESP_module/.pio/build/esp32dev/partitions.bin", device_dir / "partitions.bin")
-        shutil.copy("balconygreen/ESP_module/.pio/build/esp32dev/firmware.bin", device_dir / "firmware.bin")
+        shutil.copy(esp_module_path/".pio"/"build"/"esp32dev"/"bootloader.bin", device_dir / "bootloader.bin")
+        shutil.copy(esp_module_path/".pio"/"build"/"esp32dev"/"partitions.bin", device_dir / "partitions.bin")
+        shutil.copy(esp_module_path/".pio"/"build"/"esp32dev"/"firmware.bin", device_dir / "firmware.bin")
 
         logger.info(f"Firmware built for {device_id}")
 
