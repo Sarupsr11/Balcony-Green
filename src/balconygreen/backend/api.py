@@ -55,7 +55,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 
 # Use the LAN IP for your backend URL
-BASE_URL = 
+BASE_URL = "https://balconygreen-production.up.railway.app"
 
 logger.info(f"LAN: {BASE_URL}")
 
