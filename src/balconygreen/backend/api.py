@@ -49,13 +49,13 @@ logger = logging.getLogger("balconygreen")
 # Configuration
 # ======================
 
-SECRET_KEY = os.getenv("SECRET_KEY", "CHANGE_ME")
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 
 # Use the LAN IP for your backend URL
-BASE_URL = ""
+BASE_URL = 
 
 logger.info(f"LAN: {BASE_URL}")
 
@@ -666,3 +666,9 @@ async def upload_camera_image(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+
+@app.get("/")
+def root():
+    return {"status": "ok", "message": "BalconyGreen API is running"}
