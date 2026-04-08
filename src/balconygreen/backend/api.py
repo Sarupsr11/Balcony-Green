@@ -55,7 +55,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 
 # Use the LAN IP for your backend URL
-BASE_URL = "https://balconygreen-production.up.railway.app"
+BASE_URL = "http://10.66.165.182:8000"
 
 logger.info(f"LAN: {BASE_URL}")
 
@@ -284,81 +284,117 @@ def register_device(
     db.add(db_device)
     db.commit()
 
-    # Schedule firmware generation
     if device.device_type != "upload":
-        background_tasks.add_task(
-            generate_firmware,
-            device_id=device_id,
-            device_key=device_key,
-            wifi_ssid=device.wifi_ssid or "",
-            wifi_password=device.wifi_password or "",
-            backend_url=BASE_URL
-        )
-
-    return {
-        "device_id": device_id,
-        "device_key": device_key,
-        "firmware": {
-            "bin_url": f"{BASE_URL}/firmware/{device_id}/firmware.bin",
-            "manifest_url": f"{BASE_URL}/firmware/{device_id}/manifest.json"
-        },
-        "wifi_ssid": device.wifi_ssid,
-        "wifi_password": device.wifi_password
-    }
+        return {
+            "device_id": device_id,
+            "device_key": device_key,
+            "firmware": {
+                "bin_url": f"{BASE_URL}/firmware/generic/firmware.bin",
+                "manifest_url": f"{BASE_URL}/firmware/generic/manifest.json"
+            },
+            "wifi_ssid": device.wifi_ssid,
+            "wifi_password": device.wifi_password
+        }
+    else:
+        return {
+            "device_id": device_id,
+            "device_key": device_key
+        }
 
 
 
 
+@app.get("/firmware/generic/firmware.bin")
+def get_generic_firmware():
+    firmware_bins = Path("/app/ESP_module/.pio/build/esp32dev")
+    file_path =  firmware_bins / "firmware.bin"
+    if not file_path.exists():
+        raise HTTPException(404, "Firmware not found")
+    return FileResponse(file_path)
 
-@app.get("/firmware/{device_id}/manifest.json")
-def firmware_manifest(device_id: str):
+@app.get("/firmware/generic/bootloader.bin")
+def get_generic_firmware():
+    firmware_bins = Path("/app/ESP_module/.pio/build/esp32dev")
+    file_path =  firmware_bins / "bootloader.bin"
+    if not file_path.exists():
+        raise HTTPException(404, "Firmware not found")
+    return FileResponse(file_path)
 
-    device_dir = FIRMWARE_DIR / device_id
+@app.get("/firmware/generic/partitions.bin")
+def get_generic_firmware():
+    firmware_bins = Path("/app/ESP_module/.pio/build/esp32dev")
+    file_path =  firmware_bins / "partitions.bin"
+    if not file_path.exists():
+        raise HTTPException(404, "Firmware not found")
+    return FileResponse(file_path)
 
-    if not device_dir.exists():
-        raise HTTPException(404, "Firmware not ready")
 
+@app.get("/firmware/generic/manifest.json")
+def get_generic_manifest():
     return {
         "name": "BalconyGreen Sensor Device",
         "builds": [
             {
                 "chipFamily": "ESP32",
                 "parts": [
-                    {"path": f"{BASE_URL}/firmware/{device_id}/bootloader.bin", "offset": 4096},
-                    {"path": f"{BASE_URL}/firmware/{device_id}/partitions.bin", "offset": 32768},
-                    {"path": f"{BASE_URL}/firmware/{device_id}/firmware.bin", "offset": 65536}
+                    {"path": f"{BASE_URL}/firmware/generic/bootloader.bin", "offset": 4096},
+                    {"path": f"{BASE_URL}/firmware/generic/partitions.bin", "offset": 32768},
+                    {"path": f"{BASE_URL}/firmware/generic/firmware.bin", "offset": 65536}
                 ]
             }
         ]
     }
 
 
-# ======================
-# Firmware Endpoints
-# ======================
+# @app.get("/firmware/{device_id}/manifest.json")
+# def firmware_manifest(device_id: str):
+
+#     device_dir = FIRMWARE_DIR / device_id
+
+#     if not device_dir.exists():
+#         raise HTTPException(404, "Firmware not ready")
+
+#     return {
+#         "name": "BalconyGreen Sensor Device",
+#         "builds": [
+#             {
+#                 "chipFamily": "ESP32",
+#                 "parts": [
+#                     {"path": f"{BASE_URL}/firmware/{device_id}/bootloader.bin", "offset": 4096},
+#                     {"path": f"{BASE_URL}/firmware/{device_id}/partitions.bin", "offset": 32768},
+#                     {"path": f"{BASE_URL}/firmware/{device_id}/firmware.bin", "offset": 65536}
+#                 ]
+#             }
+#         ]
+#     }
+
+
+# # ======================
+# # Firmware Endpoints
+# # ======================
 
 
 
-@app.get("/firmware_status/{device_id}")
-def firmware_status(device_id: str):
+# @app.get("/firmware_status/{device_id}")
+# def firmware_status(device_id: str):
 
-    firmware = FIRMWARE_DIR / device_id / "firmware.bin"
+#     firmware = FIRMWARE_DIR / device_id / "firmware.bin"
 
-    if firmware.exists():
-        return {"status": "ready"}
+#     if firmware.exists():
+#         return {"status": "ready"}
 
-    return {"status": "building"}
+#     return {"status": "building"}
 
 
-@app.get("/firmware/{device_id}/{filename}")
-def get_firmware_file(device_id: str, filename: str):
+# @app.get("/firmware/{device_id}/{filename}")
+# def get_firmware_file(device_id: str, filename: str):
 
-    file_path = FIRMWARE_DIR / device_id / filename
+#     file_path = FIRMWARE_DIR / device_id / filename
 
-    if not file_path.exists():
-        raise HTTPException(404, "Firmware file not found")
+#     if not file_path.exists():
+#         raise HTTPException(404, "Firmware file not found")
 
-    return FileResponse(file_path)
+#     return FileResponse(file_path)
 
 
 
@@ -366,52 +402,52 @@ def get_firmware_file(device_id: str, filename: str):
 # Firmware Build
 # ======================
 
-def escape_for_macro(s):
-    return f'\\"{s}\\"'  # escape inner quotes
+# def escape_for_macro(s):
+#     return f'\\"{s}\\"'  # escape inner quotes
 
-def generate_firmware(
-    device_id,
-    device_key,
-    wifi_ssid,
-    wifi_password,
-    backend_url
-):
+# def generate_firmware(
+#     device_id,
+#     device_key,
+#     wifi_ssid,
+#     wifi_password,
+#     backend_url
+# ):
 
-    try:
+#     try:
 
-        logger.info(f"Building firmware for {device_id}")
+#         logger.info(f"Building firmware for {device_id}")
 
 
-        # Build flags for PlatformIO
-        build_flags = [
-            f'-DWIFI_SSID="{escape_for_macro(wifi_ssid)}"',
-            f'-DWIFI_PASSWORD="{escape_for_macro(wifi_password)}"',
-            f'-DDEVICE_KEY="{escape_for_macro(device_key)}"',
-            f'-DDEVICE_ID="{escape_for_macro(device_id)}"',
-            f'-DBACKEND_URL="{escape_for_macro(backend_url)}"'
-        ]
-        env = os.environ.copy()
-        env["PLATFORMIO_BUILD_FLAGS"] = " ".join(build_flags)
+#         # Build flags for PlatformIO
+#         build_flags = [
+#             f'-DWIFI_SSID="{escape_for_macro(wifi_ssid)}"',
+#             f'-DWIFI_PASSWORD="{escape_for_macro(wifi_password)}"',
+#             f'-DDEVICE_KEY="{escape_for_macro(device_key)}"',
+#             f'-DDEVICE_ID="{escape_for_macro(device_id)}"',
+#             f'-DBACKEND_URL="{escape_for_macro(backend_url)}"'
+#         ]
+#         env = os.environ.copy()
+#         env["PLATFORMIO_BUILD_FLAGS"] = " ".join(build_flags)
 
-        esp_module_path = Path("/app/balconygreen/ESP_module")
-        subprocess.run(
-            ["pio", "run"],
-            cwd=esp_module_path,
-            env=env,
-            check=True
-        )
+#         esp_module_path = Path("/app/balconygreen/ESP_module")
+#         subprocess.run(
+#             ["pio", "run"],
+#             cwd=esp_module_path,
+#             env=env,
+#             check=True
+#         )
 
-        device_dir = FIRMWARE_DIR / device_id
-        device_dir.mkdir(exist_ok=True, parents=True)
+#         device_dir = FIRMWARE_DIR / device_id
+#         device_dir.mkdir(exist_ok=True, parents=True)
 
-        shutil.copy(esp_module_path/".pio"/"build"/"esp32dev"/"bootloader.bin", device_dir / "bootloader.bin")
-        shutil.copy(esp_module_path/".pio"/"build"/"esp32dev"/"partitions.bin", device_dir / "partitions.bin")
-        shutil.copy(esp_module_path/".pio"/"build"/"esp32dev"/"firmware.bin", device_dir / "firmware.bin")
+#         shutil.copy(esp_module_path/".pio"/"build"/"esp32dev"/"bootloader.bin", device_dir / "bootloader.bin")
+#         shutil.copy(esp_module_path/".pio"/"build"/"esp32dev"/"partitions.bin", device_dir / "partitions.bin")
+#         shutil.copy(esp_module_path/".pio"/"build"/"esp32dev"/"firmware.bin", device_dir / "firmware.bin")
 
-        logger.info(f"Firmware built for {device_id}")
+#         logger.info(f"Firmware built for {device_id}")
 
-    except Exception as e:
-        logger.error(f"Firmware build failed: {e}")
+#     except Exception as e:
+#         logger.error(f"Firmware build failed: {e}")
 
 # ======================
 # Devices
@@ -483,13 +519,17 @@ def sync_sensors(
         result = {}
 
         for sensor_name in sensors:
-
+            timestamp = datetime.now(timezone.utc)
             # Normalize sensor type
             sensor_name = sensor_name.strip().lower()
 
+            dev = db.query(Device).filter(
+                Device.device_key == device.device_key
+            ).first()
+
             # Check if sensor already exists for this device
             existing = db.query(Sensor).filter(
-                Sensor.device_id == device.id,
+                Sensor.device_id == dev.id,
                 Sensor.sensor_name == sensor_name
             ).first()
 
@@ -501,13 +541,15 @@ def sync_sensors(
                 new_sensor = Sensor(
                     id=sensor_id,
                     device_id=device.id,
-                    sensor_name=sensor_name
+                    sensor_name=sensor_name,
+                    created_at = timestamp
                 )
 
                 db.add(new_sensor)
                 db.commit()
 
-            result["sensor_id"] = sensor_id
+            result[sensor_name] = sensor_id
+            
 
         return result
 

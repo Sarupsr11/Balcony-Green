@@ -5,6 +5,8 @@ import requests # type: ignore
 import streamlit as st # type: ignore
 from PIL import Image # type: ignore
 import pandas as pd # type: ignore
+import json
+from io import BytesIO
 
 from balconygreen.backend.register_device import DeviceRegister, remove_device
 from balconygreen.camera_sensor import ImageInput
@@ -57,9 +59,8 @@ class BalconyGreenApp:
 
         # Initialize session state
         if "page_func" not in st.session_state:
-            st.session_state["page_func"] = "Home"
-        if "predicted_plant" not in st.session_state:
-            st.session_state["predicted_plant"] = None
+            st.session_state["page_func"] = "home"
+        
 
         self.image_input = ImageInput(self.access_token)
         self.sensor_reader: SensorReader | None = None
@@ -69,6 +70,7 @@ class BalconyGreenApp:
     # Sensor Readings
     # ------------------------
     def display_sensor_readings(self):
+        st.session_state["page_func"] = "esp_device"
         st.subheader("🌡️ Live Sensor Readings")
 
         # st.info("Sensor readings display is under development.")
@@ -175,6 +177,7 @@ class BalconyGreenApp:
     # Device Management
     # ------------------------
     def device_management_section(self):
+        st.session_state["page_func"] = "esp_device"
         st.subheader("🔌 Device Management")
         is_guest = not self.access_token
 
@@ -187,9 +190,8 @@ class BalconyGreenApp:
         if "guest_weather_config" not in st.session_state:
             st.session_state.guest_weather_config = None
 
-        # ------------------------
-        # Add New Device
-        # ------------------------
+       
+
         with st.expander("➕ Add New Device (ESP32 Device)"):
             device_name = st.selectbox(
                 "🌿 Select the plant connected to the device",
@@ -223,56 +225,82 @@ class BalconyGreenApp:
                         response = DeviceRegister(device_payload=payload, headers=self.headers).register()
                         if response.status_code == 200:
                             data = response.json()
-                            st.success("Device Registered Successfully!")
-                            st.info("""📟 Setup Instructions:
-                                1. Flash the BalconyGreen firmware to your ESP32
-                                2. Power on the device
-                                3. Install Balcony Green App  
-                                4. The device will connect to the BalconyGreen backend
-                                """)
-                            manifest_url = data['firmware']['manifest_url']
+                            st.success("✅ Device Registered Successfully!")
+                            
+                            # Display device credentials from backend
+                            st.info(f"""
+                            **Device Details:**
+                            - Device ID: `{data['device_id']}`
+                            - Device Key: `{data['device_key']}`
+                            """)
+
+                            # Firmware flashing section
+                            st.info("🔧 **Step 1: Flash Firmware to your ESP32**")
+                            manifest_url  = data['firmware']['manifest_url']
                             esp32_flasher(manifest_url)
+                            
+                            st.markdown("---")
+
+                            # Generate QR code from device config (without backend URL - user enters it on ESP32)
+                            config_json = json.dumps({
+                                "device_id": data['device_id'],
+                                "device_key": data['device_key'],
+                                "wifi_ssid": wifi_ssid if wifi_ssid else "",
+                                "wifi_password": wifi_password if wifi_password else ""
+                            })
+
+
+                            st.success("📱 **Step 2: ESP32 Setup Instructions:**")
+                            st.markdown("""
+                            1. **Power on your ESP32** (after flashing) - It will create a WiFi hotspot
+                            2. **Connect your phone/tablet** to the hotspot (password: setup1234)
+                            3. **Open browser** and go to `http://192.168.4.1`
+                            4. **Enter your backend URL** (provided by the backend administrator)
+                            5. **Scan this QR code** or manually enter the device credentials
+                            6. **ESP32 will connect** to your WiFi and start sending sensor data!
+                            """)
+
                         else:
                             st.error(f"Failed to register device: {response.text}")
                     except Exception as e:
                         st.error(f"Error registering device: {e}")
+            
+                # ------------------------
+                # Weather API Device
+                # ------------------------
+                with st.expander("🌤️ Add Weather API Sensors"):
+                    self.city = st.text_input("City", "London", key="weather_city")
+                    weather_sensors = st.multiselect("Weather Sensors", ["temperature", "humidity"], key="weather_sensors")
 
-        # ------------------------
-        # Weather API Device
-        # ------------------------
-        with st.expander("🌤️ Add Weather API Sensors"):
-            self.city = st.text_input("City", "London", key="weather_city")
-            weather_sensors = st.multiselect("Weather Sensors", ["temperature", "humidity"], key="weather_sensors")
-
-            if st.button("Register Weather API", disabled=not weather_sensors):
-                payload = {
-                    "device_name": f"Weather API - {self.city}",
-                    "sensor_types": weather_sensors,
-                    "device_type": "weather_api",
-                    "device_ip": None,
-                    "city": self.city,
-                }
-                if is_guest:
-                    st.session_state.guest_weather_config = {
-                        "id": "guest_weather",
-                        "name": f"Weather API - {self.city}",
-                        "type": "weather_api",
-                        "active": True,
-                        "sensors": weather_sensors,
-                        "city": self.city,
-                    }
-                    st.success(f"✅ Weather API configured for {self.city}.")
-                    st.rerun()
-                else:
-                    try:
-                        response = DeviceRegister(device_payload=payload, headers=self.headers).register()
-                        if response.status_code == 200:
-                            st.success(f"✅ Weather API registered for {self.city}.")
+                    if st.button("Register Weather API", disabled=not weather_sensors):
+                        payload = {
+                            "device_name": f"Weather API - {self.city}",
+                            "sensor_types": weather_sensors,
+                            "device_type": "weather_api",
+                            "device_ip": None,
+                            "city": self.city,
+                        }
+                        if is_guest:
+                            st.session_state.guest_weather_config = {
+                                "id": "guest_weather",
+                                "name": f"Weather API - {self.city}",
+                                "type": "weather_api",
+                                "active": True,
+                                "sensors": weather_sensors,
+                                "city": self.city,
+                            }
+                            st.success(f"✅ Weather API configured for {self.city}.")
                             st.rerun()
                         else:
-                            st.error(f"Failed to register weather API: {response.text}")
-                    except Exception as e:
-                        st.error(f"Error registering weather API: {e}")
+                            try:
+                                response = DeviceRegister(device_payload=payload, headers=self.headers).register()
+                                if response.status_code == 200:
+                                    st.success(f"✅ Weather API registered for {self.city}.")
+                                    st.rerun()
+                                else:
+                                    st.error(f"Failed to register weather API: {response.text}")
+                            except Exception as e:
+                                st.error(f"Error registering weather API: {e}")
 
         # ------------------------
         # Show Connected Devices
@@ -325,18 +353,6 @@ class BalconyGreenApp:
                                         st.error(f"Weather API test failed: {e}")
 
                         with col2:
-                            # Activate device (only for physical + logged-in)
-                            if device.get("type") == "physical" and self.access_token:
-                                if st.button("Activate Device", key=f"activate_{device['id']}"):
-                                    try:
-                                        resp = requests.post(f"{FASTAPI_URL}/devices/{device['id']}/activate",
-                                                            headers=self.headers, timeout=3)
-                                        if resp.status_code == 200:
-                                            st.success("✅ Device activated successfully!")
-                                        else:
-                                            st.error(f"Activation failed: {resp.text}")
-                                    except Exception as e:
-                                        st.error(f"Activation error: {e}")
 
                         # Remove device
                             if st.button("Remove Device", key=f"remove_{device['id']}"):
@@ -361,6 +377,7 @@ class BalconyGreenApp:
     
 
     def live_sensor_dashboard(self):
+        st.session_state["page_func"] = "esp_device"
         st.subheader("📡 Live Sensor Dashboard")
 
         if "run_live" not in st.session_state:
@@ -382,38 +399,76 @@ class BalconyGreenApp:
                     self.display_sensor_readings()
 
                 time.sleep(5)
-                st.rerun()
+                
+    # ------------------------
+    # Page Methods
+    # ------------------------
+    def show_home_page(self):
+        st.subheader("🏠 Welcome to Balcony Green")
+
+        options = st.selectbox(
+            "What would you like to do?",
+            ["", "Add ESP32 Device", "Upload Image from Phone / PC"],
+            index=0
+        )
+
+        if options == "Add ESP32 Device":
+            st.session_state["page_func"] = "esp_device"
+            st.rerun()
+        elif options == "Upload Image from Phone / PC":
+            st.session_state["page_func"] = "upload_from_device"
+            st.rerun()
+
+    def show_esp_device_page(self):
+        st.subheader("🔌 ESP32 Device Management")
+        self.device_management_section()
+        self.live_sensor_dashboard()
+
+        if st.button("⬅ Back to Home", key="back_to_home_from_esp"):
+            st.session_state["page_func"] = "home"
+            st.rerun()
+
+    def show_upload_page(self):
+        st.subheader("📸 Plant Image Upload")
+
+        device_name = st.selectbox(
+            "🌿 Select the plant that is being uploaded",
+            self.plant_list,
+            key="plant_name"
+        )
+
+        payload = {
+            "device_name": device_name,
+            "device_type": "upload",
+        }
+        image = self.image_input.render(payload, self.headers, device_name)
+
+        if image:
+            st.session_state["uploaded_image"] = image
+
+        if st.button("⬅ Back to Home", key="back_to_home_from_upload"):
+            st.session_state["page_func"] = "home"
+            st.rerun()
+
     # ------------------------
     # Run Main Page
     # ------------------------
     def run(self):
+        # Page routing based on session state
+        if st.session_state.get("page_func") == "home":
+            self.show_home_page()
+        elif st.session_state.get("page_func") == "esp_device":
+            self.show_esp_device_page()
+        elif st.session_state.get("page_func") == "upload_from_device":
+            self.show_upload_page()
+        else:
+            # Default to home
+            st.session_state["page_func"] = "home"
+            self.show_home_page()
+                    
         
-        col1 , col2 = st.columns(2)
-
-        with col1:
-
-            col1.subheader("Upload Image for Leaf Disease Detection")
-            # Image input for plant prediction
-            device_name = st.selectbox(
-                "🌿 Select the plant that is being uploaded",
-                self.plant_list,
-                key="plant_name"
-            )
-
-            payload = {
-                    "device_name": device_name,
-                    "device_type": "upload",
-                }
-            image = self.image_input.render(payload, self.headers, device_name)
-            if image and st.session_state["page_func"] == "Home":
-                st.session_state["uploaded_image"] = image
-                
-        
-        with col2:
-
-            col2.subheader("Add Device for Monitoring Plant ")
-            self.device_management_section()
-            self.live_sensor_dashboard()
+       
+            
                 
 
         

@@ -58,7 +58,7 @@ class BalconyGreenApp:
 
         # Initialize session state
         if "page_func" not in st.session_state:
-            st.session_state["page_func"] = "Home"
+            st.session_state["page_func"] = "home"
         if "predicted_plant" not in st.session_state:
             st.session_state["predicted_plant"] = None
 
@@ -167,17 +167,17 @@ class BalconyGreenApp:
         # -----------------------
         image = self.image_input.render()
 
-        if image and st.session_state["page_func"] == "Home":
+        if image and st.session_state["page_func"] == "home":
             st.session_state["uploaded_image"] = image
             predicted_plant = self.predict_plant(image)
             st.session_state["predicted_plant"] = predicted_plant
             if st.button("Predict & Go to Plant Page"):
-                st.session_state["page_func"] = "PlantPage"
+                st.session_state["page_func"] = "plant_page"
 
         # -----------------------
         # PLANT PAGE
         # -----------------------
-        elif st.session_state.get("page_func") == "PlantPage":
+        elif st.session_state.get("page_func") == "plant_page":
             plant_name = st.session_state.get("predicted_plant", "Unknown")
             uploaded_image = st.session_state.get("uploaded_image", None)
 
@@ -219,7 +219,7 @@ class BalconyGreenApp:
             #     time.sleep(1)
 
             if st.button("⬅ Back to Home"):
-                st.session_state["page_func"] = "Home"
+                st.session_state["page_func"] = "home"
                 st.session_state["predicted_plant"] = None
 
 

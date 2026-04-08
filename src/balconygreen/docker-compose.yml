@@ -31,7 +31,7 @@ services:
 
   frontend:
     environment:
-    - BACKEND_URL=http://backend:8000
+    - FASTAPI_URL=http://backend:8000
     build:
       context: ../../
       dockerfile: src/balconygreen/frontend/Dockerfile
@@ -40,17 +40,17 @@ services:
     ports:
       - "8501:8501"
 
-  worker:
-    build:
-      context: ../../
-      dockerfile: src/balconygreen/sensors/Dockerfile
-    depends_on:
-      - db
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-    restart: unless-stopped
+  # worker:
+    # build:
+    #   context: ../../
+    #   dockerfile: src/balconygreen/sensors/Dockerfile
+    # depends_on:
+    #   - db
+    # env_file:
+    #   - .env
+    # environment:
+    #   DATABASE_URL: ${DATABASE_URL}
+    # restart: unless-stopped
 
 volumes:
   postgres_data:

@@ -1,0 +1,10 @@
+{
+  "device_id": "b9d56a64-d8fc-43e9-895c-e65d862c943d",
+  "device_key": "8aab32a0-f7ff-4454-9ac0-e4ff20110547",
+  "firmware": {
+    "bin_url": "http://10.66.165.182:8000/firmware/generic/firmware.bin",
+    "manifest_url": "http://10.66.165.182:8000/firmware/generic/manifest.json"
+  },
+  "wifi_ssid": null,
+  "wifi_password": null
+}

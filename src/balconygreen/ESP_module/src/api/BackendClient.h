@@ -9,11 +9,10 @@
 class BackendClient {
 
 public:
+    // Initialize backend with runtime info
+    static void begin(const String &url, const String &key, const String &dev_id);
 
-    // Initialize backend
-    static void begin(const String &url, const String &key, const String &s_id);
-
-    // Device registration (optional)
+    // Optional: activate/register device
     static bool activateDevice();
 
     // Backend health check
@@ -31,11 +30,9 @@ public:
                                 const String &sensor_id);
 
 private:
-
     static String backend_url;
     static String device_key;
-    static String sensor_id;
-
+    static String device_id;
 };
 
 #endif

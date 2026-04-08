@@ -2,179 +2,78 @@
 
 String BackendClient::backend_url = "";
 String BackendClient::device_key = "";
-String BackendClient::sensor_id = "";
+String BackendClient::device_id = "";
 
-// ============================
-// Initialization
-// ============================
-
-void BackendClient::begin(const String &url, const String &key, const String &s_id) {
-
+void BackendClient::begin(const String &url, const String &key, const String &dev_id) {
     backend_url = url;
-    device_key = key;
-    sensor_id = s_id;
-
-    Serial.println("BackendClient initialized");
-    Serial.println("Backend URL: " + backend_url);
+    device_key  = key;
+    device_id   = dev_id;
 }
 
-// ============================
-// Device Activation
-// ============================
-
-bool BackendClient::activateDevice() {
-
-    // For now just return true
-    return true;
-}
-
-// ============================
-// Ping Backend
-// ============================
 
 bool BackendClient::ping() {
-
-    if (WiFi.status() != WL_CONNECTED) return false;
+    if (backend_url.length() == 0) return false;
 
     HTTPClient http;
-
-    String url = backend_url + "/ping";
-
-    http.begin(url);
-
-    int response = http.GET();
-
+    http.begin(backend_url + "/ping");
+    int code = http.GET();
+    Serial.printf("📊 Ping response: HTTP %d\n", code);
     http.end();
-
-    Serial.print("Ping response: ");
-    Serial.println(response);
-
-    return response == 200;
+    return code == 200;
 }
 
-// ============================
-// Send Sensor Reading
-// ============================
-
-void BackendClient::sendReading(const String &sensor_id,
+void BackendClient::sendReading(const String &sensor_id_,
                                 float value,
                                 const String &unit,
-                                const String &sensor_name) {
+                                const String &source) {
 
-    if (WiFi.status() != WL_CONNECTED) return;
+    Serial.printf("➡️ sendReading called: sensor=%s value=%.2f unit=%s source=%s\n",
+        sensor_id_.c_str(), value, unit.c_str(), source.c_str());
 
-    HTTPClient http;
-
-    String url = backend_url + "/sensor_readings";
-
-    http.begin(url);
-
-    http.addHeader("Content-Type", "application/json");
-    http.addHeader("Authorization", "Bearer " + device_key);
+    if (!WiFi.isConnected()) {
+        Serial.println("⚠️ sendReading skipped: Wi-Fi not connected");
+        return;
+    }
+    if (backend_url.length() == 0) {
+        Serial.println("⚠️ sendReading skipped: backend_url missing");
+        return;
+    }
+    if (device_key.length() == 0) {
+        Serial.println("⚠️ sendReading skipped: device_key missing");
+        return;
+    }
 
     JsonDocument doc;
-
-    doc["sensor_id"] = sensor_id;
+    doc["sensor_id"] = sensor_id_;
     doc["value"] = value;
     doc["unit"] = unit;
-    doc["sensor_name"] = sensor_name;
+    doc["sensor_name"] = source;
 
     String payload;
-
     serializeJson(doc, payload);
 
-    Serial.println("Sending reading:");
-    Serial.println(payload);
+    Serial.printf("   Sensor: %s, Value: %.2f %s\n", sensor_id_.c_str(), value, unit.c_str());
+    
+    HTTPClient http;
+    http.begin(backend_url + "/sensor_readings");
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("Authorization", "Bearer " + device_key);
+    int code = http.POST(payload);
 
-    int response = http.POST(payload);
-
-    Serial.print("HTTP Response: ");
-    Serial.println(response);
 
     http.end();
 }
 
-// ============================
-// Upload Camera Image
-// ============================
-
-bool BackendClient::sendCameraImage(uint8_t *imageData,
-                                    size_t imageSize,
-                                    const String &sensor_id) {
-
-    if (WiFi.status() != WL_CONNECTED) return false;
+bool BackendClient::sendCameraImage(uint8_t *imageData, size_t imageSize, const String &sensor_id_) {
+    if (!WiFi.isConnected() || backend_url.length() == 0 || device_key.length() == 0) return false;
 
     HTTPClient http;
-
-    String url = backend_url + "/camera/upload/" + sensor_id;
-
-    http.begin(url);
-
+    http.begin(backend_url + "/camera/upload/"+ sensor_id_);
     http.addHeader("Authorization", "Bearer " + device_key);
+    http.addHeader("Content-Type", "application/octet-stream");
 
-    String boundary = "----ESP32Boundary";
-    http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
-
-    // -------------------------
-    // MULTIPART BODY PARTS
-    // -------------------------
-
-    String head =
-        "--" + boundary + "\r\n"
-        "Content-Disposition: form-data; name=\"file\"; filename=\"plant.jpg\"\r\n"
-        "Content-Type: image/jpeg\r\n\r\n";
-
-    // ✅ ADD plant field
-    String plantField =
-        "\r\n--" + boundary + "\r\n"
-        "Content-Disposition: form-data; name=\"plant\"\r\n\r\n"
-        "tomato\r\n";
-
-    // ✅ ADD mode field
-    String modeField =
-        "--" + boundary + "\r\n"
-        "Content-Disposition: form-data; name=\"mode\"\r\n\r\n"
-        "binary\r\n";
-
-    String tail = "--" + boundary + "--\r\n";
-
-    // -------------------------
-    // TOTAL LENGTH
-    // -------------------------
-
-    size_t totalLen = head.length() +
-                      imageSize +
-                      plantField.length() +
-                      modeField.length() +
-                      tail.length();
-
-    http.addHeader("Content-Length", String(totalLen));
-
-    WiFiClient *stream = http.getStreamPtr();
-
-    int response = http.sendRequest("POST");
-
-    if (response <= 0) {
-        Serial.println("Upload failed");
-        http.end();
-        return false;
-    }
-
-    // -------------------------
-    // SEND DATA
-    // -------------------------
-
-    stream->print(head);
-    stream->write(imageData, imageSize);
-
-    stream->print(plantField);
-    stream->print(modeField);
-    stream->print(tail);
-
-    Serial.print("Camera upload response: ");
-    Serial.println(response);
+    int code = http.POST(imageData, imageSize);
 
     http.end();
-
-    return response == 200;
+    return code == 200;
 }

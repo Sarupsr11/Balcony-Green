@@ -1,40 +1,31 @@
 #pragma once
 
 #include <Arduino.h>
-
-/*
-   Device configuration structure
-
-   Values are injected at build time by the backend
-   using PlatformIO build flags.
-
-   Example:
-
-   -DWIFI_SSID="MyWifi"
-   -DWIFI_PASSWORD="password"
-   -DDEVICE_KEY="uuid"
-   -DSENSOR_ID="uuid"
-   -DBACKEND_URL="https://api.balconygreen.com"
-*/
+#include <FS.h>
+#include <SPIFFS.h>
+#include <ArduinoJson.h>
 
 struct DeviceConfig {
-
     String wifi_ssid;
     String wifi_password;
     String device_key;
     String backend_url;
     String device_id;
     String sensor_id;
-
 };
 
 class ConfigManager {
-
 public:
 
-    /*
-       Load configuration from firmware macros
-    */
+    // Initialize SPIFFS
+    static bool begin();
+
+    // Load config from SPIFFS (fallback to build-time macros if not present)
     static bool loadConfig(DeviceConfig &config);
 
+    // Save config to SPIFFS
+    static bool saveConfig(const DeviceConfig &config);
+
+private:
+    static constexpr const char* CONFIG_FILE = "/config.json";
 };

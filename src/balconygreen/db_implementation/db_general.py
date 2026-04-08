@@ -4,20 +4,20 @@ from sqlalchemy import create_engine # type: ignore
 from sqlalchemy.orm import sessionmaker # type: ignore
 from balconygreen.db_implementation.schema.init import Base
 
-# ----------------------
-# 1️⃣ Get DATABASE_URL from Railway env
-# ----------------------
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is not set! Make sure you added the PostgreSQL plugin on Railway.")
+    raise RuntimeError("DATABASE_URL is not set!")
 
-# ----------------------
-# 2️⃣ Create SQLAlchemy Engine
-# ----------------------
-# For PostgreSQL on Railway, SSL is required
-connect_args = {"sslmode": "require"} if DATABASE_URL.startswith("postgresql") else {}
+# Enable SSL only if explicitly needed
+connect_args = {}
+if "sslmode=require" in DATABASE_URL or DATABASE_URL.startswith("postgresql://"):
+    connect_args = {"sslmode": "require"}
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args=connect_args)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    connect_args=connect_args
+)
 
 # ----------------------
 # 3️⃣ Create Session Factory

@@ -8,9 +8,9 @@ from streamlit_cookies_manager import EncryptedCookieManager  # type: ignore
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-FASTAPI_URL = os.getenv("FASTAPI","https://balconygreen-production.up.railway.app")
+FASTAPI_URL = os.getenv("FASTAPI_URL","https://balconygreen-production.up.railway.app")
 
-
+logger.info(FASTAPI_URL)
 # -------------------------
 # Cookies
 # -------------------------

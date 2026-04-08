@@ -32,6 +32,8 @@ classifiers = [
 frontend = [
     "streamlit",
     "streamlit-cookies-manager",
+    "qrcode[pil]",
+    "pillow",
 ]
 
 # ---------------- Backend (FastAPI) ----------------
@@ -46,8 +48,7 @@ backend = [
     "psycopg2-binary",
     "argon2-cffi",
     "python-multipart",
-    "timm",
-    "pyngrok"
+    "timm"
 ]
 
 # ---------------- Machine Learning (CPU only) ----------------
@@ -60,6 +61,7 @@ ml = [
     "timm",
     "matplotlib",
     "tqdm",
+    
 ]
 
 # ---------------- Worker ----------------

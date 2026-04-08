@@ -1,30 +1,37 @@
 #pragma once
 
-// Use the build system macro if present, otherwise default to empty string
+// ------------------------
+// Default WiFi credentials
+// ------------------------
 #ifndef WIFI_SSID
-#define WIFI_SSID ""
+#define WIFI_SSID ""       // Will be set via captive portal
 #endif
 
 #ifndef WIFI_PASSWORD
-#define WIFI_PASSWORD ""
+#define WIFI_PASSWORD ""   // Will be set via captive portal
 #endif
 
+// ------------------------
+// Backend info
+// ------------------------
 #ifndef BACKEND_URL
-#define BACKEND_URL "http://10.66.165.182:8000"
+#define BACKEND_URL "https://balconygreen-production.up.railway.app"
 #endif
 
+// ------------------------
+// Device registration info
+// ------------------------
 #ifndef DEVICE_KEY
-#define DEVICE_KEY ""
+#define DEVICE_KEY ""      // Set after user registers device
 #endif
 
-#ifndef DEVICE_ID
-#define DEVICE_ID ""
-#endif
 
-#ifndef SENSOR_ID
-#define SENSOR_ID ""
-#endif
 
-#define SENSOR_READ_INTERVAL 60000
-#define DHT_PIN 5
-#define DHT_TYPE DHT22
+
+
+// ------------------------
+// Sensor config
+// ------------------------
+#define SENSOR_READ_INTERVAL 60000    // 1 min interval
+#define DHT_PIN 4                      // DHT sensor pin
+#define DHT_TYPE DHT22                  // DHT sensor type

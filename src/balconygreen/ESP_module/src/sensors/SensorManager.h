@@ -3,15 +3,13 @@
 
 #include <Arduino.h>
 #include <DHT.h>
-#include "esp_camera.h"   // IMPORTANT
-
-
+#include "esp_camera.h"
+#include "config/Config.h"
 
 // ========================
 // CONFIGURATION
 // ========================
 
-#define DHT_PIN 4
 #define DHT_TYPE DHT22
 
 #define SOIL_PIN 34
@@ -23,12 +21,9 @@
 // SENSOR MANAGER CLASS
 // ========================
 
-
-
 class SensorManager {
 
 public:
-
     SensorManager();
 
     void begin();
@@ -42,9 +37,9 @@ public:
 
     // Camera
     bool cameraAvailable();
-    bool captureImage();
-    bool captureImageToSD(String filename);
     camera_fb_t* captureFrame();
+    bool captureImage();
+    bool captureImageToSD(const String &filename);
 
     // Status flags
     bool hasTemperature();
@@ -52,16 +47,21 @@ public:
     bool hasSoilSensor();
     bool hasLightSensor();
     bool hasSoilTempSensor();
+    bool hasCamera();
 
 private:
-
     DHT dht;
 
     bool hasDHT = false;
     bool hasSoil = false;
     bool hasLight = false;
     bool hasSoilTemp = false;
-    bool hasCamera = false;
+    bool hasCameraSensor = false;
+
+    void initDHT();
+    void initSoilSensor();
+    void initLightSensor();
+    void initCamera();
 };
 
 #endif
