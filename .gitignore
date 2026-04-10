@@ -173,3 +173,13 @@ cython_debug/
 
 # cache dataset files
 disease-detection/Dataset
+
+
+ESP_module/*
+
+!ESP_module/.pio/build/esp32dev/bootloader.bin
+!ESP_module/.pio/build/esp32dev/firmware.bin
+!ESP_module/.pio/build/esp32dev/partitions.bin
+!ESP_module/.pio/build/esp32dev/src
+!ESP_module/.pio/build/esp32dev/main.cpp
+!ESP_module/.pio/build/esp32dev/platformio.ini

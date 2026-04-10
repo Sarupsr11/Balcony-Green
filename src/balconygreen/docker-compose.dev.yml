@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  backend:
+    volumes:
+      - ../../src/balconygreen:/app/balconygreen
+      - ../../device_data/devices:/app/device_data/devices
+      - ../../src/balconygreen/ESP_module:/app/ESP_module
+    command: >
+      python -m uvicorn balconygreen.backend.api:app --host 0.0.0.0 --port 8000
+
+
+  frontend:
+    volumes:
+      - ../../src/balconygreen:/app/balconygreen
+      - ../../device_data/devices:/app/device_data/devices
+    command: >
+      python -m streamlit run balconygreen/frontend/login_page.py
+
+  # worker:
+  #   volumes:
+  #     - ../../src/balconygreen:/app/balconygreen
+  #     - ../../device_data/devices:/app/device_data/devices

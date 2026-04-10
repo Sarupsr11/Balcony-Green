@@ -1,47 +1,36 @@
-# db.py
-import sqlite3
-from contextlib import contextmanager
-from balconygreen.db_implementation.schema import SCHEMA_SQL
+# balconygreen/db_implementation/db_general.py
+import os
+from sqlalchemy import create_engine # type: ignore
+from sqlalchemy.orm import sessionmaker # type: ignore
+from balconygreen.db_implementation.schema.init import Base
 
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set!")
 
+# Enable SSL only if explicitly needed
+connect_args = {}
+if "sslmode=require" in DATABASE_URL or DATABASE_URL.startswith("postgresql://"):
+    connect_args = {"sslmode": "require"}
 
-class Database:
-    def __init__(self, db_path: str):
-        self.db_path = db_path
-        self._init_db()
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    connect_args=connect_args
+)
 
-    def _init_db(self):
-        with sqlite3.connect(self.db_path, check_same_thread= False) as conn:
-            conn.execute("PRAGMA foreign_keys = ON")
-            for stmt in SCHEMA_SQL:
-                conn.execute(stmt)
-            conn.commit()
+# ----------------------
+# 3️⃣ Create Session Factory
+# ----------------------
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
-    @contextmanager
-    def get_conn(self):
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+# ----------------------
+# 4️⃣ Auto-create tables
+# ----------------------
+def init_db():
+    """Call once to ensure all tables exist."""
+    Base.metadata.create_all(bind=engine)
+    print("✅ All tables are created and ready.")
 
-    def execute(self, query, params=()):
-        with self.get_conn() as conn:
-            conn.execute(query, params)
-
-    def fetch_one(self, query, params=()):
-        with self.get_conn() as conn:
-            cur = conn.execute(query, params)
-            row = cur.fetchone()
-            return dict(row) if row else None
-
-    def fetch_all(self, query, params=()):
-        with self.get_conn() as conn:
-            cur = conn.execute(query, params)
-            return [dict(r) for r in cur.fetchall()]
+# Optional: automatically initialize tables on import
+init_db()

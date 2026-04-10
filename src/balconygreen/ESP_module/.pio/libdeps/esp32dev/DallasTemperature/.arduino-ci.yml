@@ -1,0 +1,15 @@
+# .arduino-ci.yml
+
+# Compilation settings
+compile:
+  platforms:
+    - uno
+  libraries:
+    - "OneWire"
+
+# Unit testing settings
+unittest:
+  platforms:
+    - uno
+  libraries:
+    - "OneWire"

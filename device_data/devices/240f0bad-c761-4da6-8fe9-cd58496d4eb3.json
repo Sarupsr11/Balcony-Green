@@ -1,0 +1,10 @@
+{
+  "device_id": "240f0bad-c761-4da6-8fe9-cd58496d4eb3",
+  "device_key": "8dfcfb50-db58-461a-8966-978c85db7a76",
+  "firmware": {
+    "bin_url": "https://balconygreen-production.up.railway.app/firmware/240f0bad-c761-4da6-8fe9-cd58496d4eb3/firmware.bin",
+    "manifest_url": "https://balconygreen-production.up.railway.app/firmware/240f0bad-c761-4da6-8fe9-cd58496d4eb3/manifest.json"
+  },
+  "wifi_ssid": "Redmi 10 Power",
+  "wifi_password": "Sar12345"
+}
