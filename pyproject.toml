@@ -48,13 +48,16 @@ backend = [
     "psycopg2-binary",
     "argon2-cffi",
     "python-multipart",
-    "timm"
+    "timm",
+    "torch==2.1.0+cpu",
+    "joblib",
+    "scikit-learn",
+    "numpy",
+    "pandas"
 ]
 
 # ---------------- Machine Learning (CPU only) ----------------
 ml = [
-    "numpy",
-    "pandas",
     "scikit-learn",
     "torch==2.1.0+cpu",
     "torchvision==0.16.0+cpu",

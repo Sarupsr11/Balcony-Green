@@ -5,7 +5,9 @@ import subprocess
 import shutil
 import socket
 import json
-
+import pandas as pd # type: ignore
+from balconygreen.model_prediction.BasilikumPlant import BasilikumPlant
+from balconygreen.model_prediction.health_model import run_inference
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from pathlib import Path
@@ -278,8 +280,7 @@ def register_device(
         device_type = device.device_type,
         device_name=device.device_name,
         device_key=device_key,
-        city=device.city,
-        is_active=True
+        city=device.city
     )
     db.add(db_device)
     db.commit()
@@ -291,9 +292,7 @@ def register_device(
             "firmware": {
                 "bin_url": f"{BASE_URL}/firmware/generic/firmware.bin",
                 "manifest_url": f"{BASE_URL}/firmware/generic/manifest.json"
-            },
-            "wifi_ssid": device.wifi_ssid,
-            "wifi_password": device.wifi_password
+            }
         }
     else:
         return {
@@ -568,6 +567,11 @@ def save_sensor_reading(
 
     timestamp = reading.timestamp or datetime.now(timezone.utc)
 
+    db.query(Device).filter(Device.id == device.id).update(
+    {"is_active": True}
+    )
+    db.commit()
+
     db_reading = Reading(
         device_id=device.id,
         sensor_id=reading.sensor_id,
@@ -716,6 +720,208 @@ async def upload_camera_image(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+
+
+
+
+
+@app.get("/predict")
+def predict_plant_health(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+
+    # ----------------------------------
+    # 1. Fetch readings (same as before)
+    # ----------------------------------
+    readings = (
+        db.query(Reading, Sensor)
+        .join(Sensor, Reading.sensor_id == Sensor.id)
+        .join(Device, Reading.device_id == Device.id)
+        .filter(Device.user_id == user.id)
+        .order_by(Reading.timestamp.asc())  # IMPORTANT: ASC for time series
+        .all()
+    )
+
+    if not readings:
+        return {"error": "No readings found"}
+
+    # ----------------------------------
+    # 2. Convert to DataFrame
+    # ----------------------------------
+    
+    data = [
+        {
+            "timestamp": r.timestamp,
+            "sensor_name": s.sensor_name,
+            "value": r.value
+        }
+        for r, s in readings
+    ]
+
+    df = pd.DataFrame(data)
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+    # Pivot → required format
+    df = df.pivot_table(
+        index="timestamp",
+        columns="sensor_name",
+        values="value"
+    ).reset_index()
+
+    df.columns.name = None
+
+    df = df.rename(columns={
+        "temperature": "temperature",
+        "humidity": "humidity",
+        "soilmoisture": "soil_moisture"
+    })
+
+    df = df.sort_values("timestamp")
+
+    if len(df) < 20:
+        return {"error": "Not enough data for prediction"}
+
+    # ----------------------------------
+    # 3. Apply Basilikum transformation
+    # ----------------------------------
+    plant = BasilikumPlant(df)
+    df_transformed = plant.basil_df
+
+    
+
+    result = run_inference(df=df_transformed)
+
+    latest = df_transformed.iloc[-1]
+
+    return {
+        "plant": "basilikum",
+
+        # -----------------------------
+        # CURRENT STATE (raw + interpretable)
+        # -----------------------------
+        "current": {
+            "environment": {
+                "temperature": float(latest["temperature"]),
+                "humidity": float(latest["humidity"]),
+                "soil_moisture": float(latest["soil_moisture"]),
+            },
+            "health": {
+                "score": float(latest["overall_health_on_ext"]),
+                "label": latest["health_based_on_opt"]
+            }
+        },
+
+        # -----------------------------
+        # MODEL OUTPUT (future)
+        # -----------------------------
+        "prediction": {
+            "health_score": result["predicted_health_pct"],
+            "risk": result["predicted_risk"],
+            "trend": result["trend"],
+            "status": result["status"],
+            "confidence": result["confidence"]
+        },
+
+        # -----------------------------
+        # META (useful for debugging/UI)
+        # -----------------------------
+        "meta": {
+            "data_points": len(df_transformed),
+            "window_used": 25
+        }
+    }
+
+
+@app.get("/predict/latest")
+def predict_latest(
+    limit: int = 300,  # adjustable window
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+
+    # ----------------------------------
+    # 1. Fetch ONLY latest readings
+    # ----------------------------------
+    readings = (
+        db.query(Reading, Sensor)
+        .join(Sensor, Reading.sensor_id == Sensor.id)
+        .join(Device, Reading.device_id == Device.id)
+        .filter(Device.user_id == user.id)
+        .order_by(Reading.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+
+    if not readings:
+        return {"error": "No readings found"}
+
+    # ----------------------------------
+    # 2. Convert → DataFrame
+    # ----------------------------------
+    data = [
+        {
+            "timestamp": r.timestamp,
+            "sensor_name": s.sensor_name,
+            "value": r.value
+        }
+        for r, s in readings
+    ]
+
+    df = pd.DataFrame(data)
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+    # Pivot
+    df = df.pivot_table(
+        index="timestamp",
+        columns="sensor_name",
+        values="value"
+    ).reset_index()
+
+    df.columns.name = None
+
+    df = df.rename(columns={
+        "temperature": "temperature",
+        "humidity": "humidity",
+        "soil_moisture": "soil_moisture"
+    })
+
+    # IMPORTANT: reverse back to ASC
+    df = df.sort_values("timestamp")
+
+    if len(df) < 20:
+        return {"error": "Not enough data for prediction"}
+
+    # ----------------------------------
+    # 3. Transform
+    # ----------------------------------
+    plant = BasilikumPlant(df)
+    df_transformed = plant.basil_df
+
+    # ----------------------------------
+    # 4. Inference
+    # ----------------------------------
+
+    result = run_inference(df=df_transformed)
+
+    return {
+        "mode": "latest",
+
+        # 🔥 What frontend actually needs
+        "status": result["status"],
+        "trend": result["trend"],
+
+        "prediction": {
+            "health_score": result["predicted_health_pct"],
+            "risk": result["predicted_risk"],
+        },
+
+        # ⚡ Quick signal for alerts
+        "alert": {
+            "level": result["alert_level"],
+            "confidence": result["confidence"]
+        }
+    }
 
 
 @app.get("/")

@@ -198,24 +198,19 @@ class BalconyGreenApp:
                 self.plant_list,
                 key="device_name"
             )
-            wifi_ssid = st.text_input("Wi-Fi SSID (ESP only, optional)", key="wifi_ssid")
-            wifi_password = st.text_input("Wi-Fi Password (ESP only, optional)", type="password", key="wifi_password")
+        
 
             if st.button("Register Device", disabled=not device_name):
                 payload = {
                     "device_name": device_name,
                     "device_type": "physical",
-                    "wifi_ssid": wifi_ssid if wifi_ssid else None,
-                    "wifi_password": wifi_password if wifi_password else None,
                 }
 
                 if is_guest:
                     guest_device = {
                         "id": f"guest_{len(st.session_state.guest_devices)}",
                         "device_name": device_name,
-                        "is_active": True,
-                        "device_type": "physical",
-                        "esp_config": {"wifi_ssid": wifi_ssid, "wifi_password": wifi_password} if wifi_ssid else None,
+                        "device_type": "physical"
                     }
                     st.session_state.guest_devices.append(guest_device)
                     st.success(f"✅ Device '{device_name}' added in Guest Mode.")
@@ -230,7 +225,6 @@ class BalconyGreenApp:
                             # Display device credentials from backend
                             st.info(f"""
                             **Device Details:**
-                            - Device ID: `{data['device_id']}`
                             - Device Key: `{data['device_key']}`
                             """)
 
@@ -241,22 +235,14 @@ class BalconyGreenApp:
                             
                             st.markdown("---")
 
-                            # Generate QR code from device config (without backend URL - user enters it on ESP32)
-                            config_json = json.dumps({
-                                "device_id": data['device_id'],
-                                "device_key": data['device_key'],
-                                "wifi_ssid": wifi_ssid if wifi_ssid else "",
-                                "wifi_password": wifi_password if wifi_password else ""
-                            })
-
+                            
 
                             st.success("📱 **Step 2: ESP32 Setup Instructions:**")
                             st.markdown("""
                             1. **Power on your ESP32** (after flashing) - It will create a WiFi hotspot
                             2. **Connect your phone/tablet** to the hotspot (password: setup1234)
                             3. **Open browser** and go to `http://192.168.4.1`
-                            4. **Enter your backend URL** (provided by the backend administrator)
-                            5. **Scan this QR code** or manually enter the device credentials
+                            4. **Enter the device key, wifi name and password
                             6. **ESP32 will connect** to your WiFi and start sending sensor data!
                             """)
 
@@ -373,7 +359,68 @@ class BalconyGreenApp:
                                         st.error(f"Failed to remove device: {e}")
 
 
+    def sensor_health_status(self):
+        
 
+        st.set_page_config(page_title="🌿 Plant Health Monitor", layout="wide")
+
+        st.title("🌿 Basil Plant Health Dashboard")
+
+        try:
+            data = requests.get(f"{FASTAPI_URL}/predict/latest", headers=self.headers, timeout=3)
+
+            if data:
+                
+                # -----------------------------
+                # Extract values
+                # -----------------------------
+                status = data["status"]
+                trend = data["trend"]
+                health = data["prediction"]["health_score"]
+                risk = data["prediction"]["risk"]
+                alert = data["alert"]["level"]
+
+                # -----------------------------
+                # Top Metrics
+                # -----------------------------
+                col1, col2, col3 = st.columns(3)
+
+                col1.metric("🌱 Health Score", f"{health:.2f}")
+                col2.metric("📉 Risk Score", f"{risk:.4f}")
+                col3.metric("📊 Trend", trend)
+
+                # -----------------------------
+                # Status Indicator
+                # -----------------------------
+                if status == "critical":
+                    st.error("🚨 Plant is in CRITICAL condition!")
+                elif status == "warning":
+                    st.warning("⚠️ Plant health declining")
+                else:
+                    st.success("✅ Plant is healthy")
+
+                # -----------------------------
+                # Alert Level
+                # -----------------------------
+                st.subheader("Alert Level")
+                st.write(f"**{alert.upper()}**")
+
+                # -----------------------------
+                # Simple Gauge (progress bar)
+                # -----------------------------
+                st.subheader("Health Visualization")
+                st.progress(min(max(int(health), 0), 100))
+
+                # -----------------------------
+                # Auto Refresh
+                # -----------------------------
+                st.caption("Auto-refresh every 10 seconds")
+                time.sleep(5)
+                st.rerun()
+            else:
+                st.write("No readings to predict")
+        except Exception as e:
+                st.error(f"Failed to predict: {e}")
     
 
     def live_sensor_dashboard(self):
@@ -399,6 +446,8 @@ class BalconyGreenApp:
                     self.display_sensor_readings()
 
                 time.sleep(5)
+
+        self.sensor_health_status()
                 
     # ------------------------
     # Page Methods
