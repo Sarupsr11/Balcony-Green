@@ -34,12 +34,11 @@ RUN pip install --upgrade pip \
 # --------------------------------------------------
 # Install backend dependencies
 # --------------------------------------------------
-RUN pip install --no-cache-dir .[backend]
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    .[backend]
 
-# --------------------------------------------------
-# Install PlatformIO
-# --------------------------------------------------
-RUN pip install --no-cache-dir platformio
 
 # --------------------------------------------------
 # Copy backend source code

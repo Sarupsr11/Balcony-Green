@@ -49,19 +49,17 @@ backend = [
     "argon2-cffi",
     "python-multipart",
     "timm",
-    "torch==2.1.0+cpu",
     "joblib",
-    "scikit-learn",
-    "numpy",
-    "pandas"
+    "numpy<2",
+    "scikit-learn==1.5.2",
+    "pandas<2"
 ]
 
 # ---------------- Machine Learning (CPU only) ----------------
 ml = [
+    "numpy",
+    "pandas",
     "scikit-learn",
-    "torch==2.1.0+cpu",
-    "torchvision==0.16.0+cpu",
-    "timm",
     "matplotlib",
     "tqdm",
     

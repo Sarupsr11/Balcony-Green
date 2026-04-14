@@ -1,0 +1,8 @@
+{
+  "device_id": "576ee14b-5026-4f9b-bd8f-6aef114279fe",
+  "device_key": "a61b2130-508d-4ff3-9125-de5b40d052dd",
+  "firmware": {
+    "bin_url": "https://balconygreen-production.up.railway.app/firmware/generic/firmware.bin",
+    "manifest_url": "https://balconygreen-production.up.railway.app/firmware/generic/manifest.json"
+  }
+}

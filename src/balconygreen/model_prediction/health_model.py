@@ -15,6 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PLANT_MODEL_V6 = (
     PROJECT_ROOT
     / "model_prediction"
+    / "Models"
     / "health_risk_model"
     / "plant_model_v6.pth"
 )
@@ -23,6 +24,7 @@ PLANT_MODEL_V6 = (
 SCALAR_SENSOR = (
     PROJECT_ROOT
     / "model_prediction"
+    / "Models"
     / "health_risk_model"
     / "scaler_sensor.pkl"
 )
@@ -31,6 +33,7 @@ SCALAR_SENSOR = (
 SCALER_STATE = (
     PROJECT_ROOT
     / "model_prediction"
+    / "Models"
     / "health_risk_model"
     / "scaler_state.pkl"
 )
@@ -272,26 +275,41 @@ def run_training(df, window=25, epochs=30, batch_size=32):
 
 
 
+def load_pipeline(
+    model_path=PLANT_MODEL_V6,
+    scaler_s_path=SCALAR_SENSOR,
+    scaler_st_path=SCALER_STATE
+):
+    model = PlantModelV6(len(SENSOR_COLS), len(STATE_COLS))
+    model.load_state_dict(torch.load(model_path, map_location="cpu"))
+    model.eval()
+
+    scaler_s = joblib.load(scaler_s_path)
+    scaler_st = joblib.load(scaler_st_path)
+
+    return model, scaler_s, scaler_st
+
+
+model_GRU, scaler_s, scaler_st = load_pipeline()
+
+
+
+
 
 def run_inference(
     df,
-    model = PLANT_MODEL_V6,
-    scaler_s = SCALAR_SENSOR,
-    scaler_st = SCALER_STATE,
-    window=25,
+    model = model_GRU,
+    scaler_s = scaler_s,
+    scaler_st = scaler_st,
+    window=25
 ):
     """
-    Runs inference on transformed plant dataframe.
+    Runs inference on plant dataframe.
 
     Returns:
-        dict with:
-            - predicted_health
-            - predicted_risk
-            - trend
-            - alert_level
+        dict with predictions + interpreted signals
     """
 
-    
     model.eval()
 
     # -----------------------------
@@ -302,21 +320,21 @@ def run_inference(
     df = df.sort_index().reset_index(drop=True)
 
     if len(df) < window:
-        raise ValueError("Not enough data for inference window")
+        raise ValueError(f"Need at least {window} rows, got {len(df)}")
 
     # -----------------------------
-    # Take LAST window only
+    # Take LAST window
     # -----------------------------
     sensor = df[SENSOR_COLS].values[-window:]
     state = df[STATE_COLS].values[-window:]
 
     # -----------------------------
-    # Scale (IMPORTANT)
+    # Scale (CRITICAL)
     # -----------------------------
     sensor = scaler_s.transform(sensor)
     state = scaler_st.transform(state)
 
-    # Add batch dimension
+    # Convert to tensor
     sensor = torch.tensor(sensor[np.newaxis, :, :], dtype=torch.float32)
     state = torch.tensor(state[np.newaxis, :, :], dtype=torch.float32)
 
@@ -332,13 +350,13 @@ def run_inference(
     # -----------------------------
     # DERIVED INTELLIGENCE
     # -----------------------------
-
     latest_health = df["health_score"].iloc[-1]
 
     # Trend
-    if pred_health > latest_health + 0.02:
+    delta = pred_health - latest_health
+    if delta > 0.02:
         trend = "improving"
-    elif pred_health < latest_health - 0.02:
+    elif delta < -0.02:
         trend = "declining"
     else:
         trend = "stable"
@@ -351,7 +369,7 @@ def run_inference(
     else:
         alert = "low_risk"
 
-    # Combine signal
+    # Combined status
     if trend == "declining" and alert == "high_risk":
         status = "critical"
     elif trend == "declining":
@@ -359,23 +377,17 @@ def run_inference(
     else:
         status = "healthy"
 
-    
-
-    # confidence (how strong prediction is)
-    confidence = abs(pred_health - latest_health)
-
-    # normalized health (0–100 for UI)
-    predicted_health_pct = pred_health * 100
-    current_health_pct = latest_health * 100
+    # Confidence
+    confidence = abs(delta)
 
     return {
-    "predicted_health": float(pred_health),
-    "predicted_health_pct": float(predicted_health_pct),
-    "predicted_risk": float(pred_risk),
-    "current_health": float(latest_health),
-    "current_health_pct": float(current_health_pct),
-    "trend": trend,
-    "alert_level": alert,
-    "status": status,
-    "confidence": float(confidence)
-}
+        "predicted_health": float(pred_health),
+        "predicted_health_pct": float(pred_health * 100),
+        "predicted_risk": float(pred_risk),
+        "current_health": float(latest_health),
+        "current_health_pct": float(latest_health * 100),
+        "trend": trend,
+        "alert_level": alert,
+        "status": status,
+        "confidence": float(confidence)
+    }

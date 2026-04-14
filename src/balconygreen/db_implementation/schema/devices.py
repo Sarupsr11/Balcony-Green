@@ -14,7 +14,7 @@ class Device(Base):
     device_key = Column(String(255), unique=True, nullable=False)
     device_type = Column(String(50), default="physical")
     city = Column(String(100))
-    is_active = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=False)
     last_seen = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True))
 

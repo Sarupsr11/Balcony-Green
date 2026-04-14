@@ -11,6 +11,7 @@ from balconygreen.model_prediction.health_model import run_inference
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from pathlib import Path
+import numpy as np # type: ignore
 
 from fastapi import ( # type: ignore
     FastAPI,
@@ -57,7 +58,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 
 # Use the LAN IP for your backend URL
-BASE_URL = "http://10.66.165.182:8000"
+BASE_URL = "https://balconygreen-production.up.railway.app"
 
 logger.info(f"LAN: {BASE_URL}")
 
@@ -210,7 +211,7 @@ def get_current_device(
 
     device = db.query(Device).filter(Device.device_key == device_key).first()
 
-    if not device or not device.is_active:
+    if not device:
         raise HTTPException(status_code=401, detail="Invalid device")
 
     device.last_seen = datetime.now(timezone.utc)
@@ -265,7 +266,6 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 @app.post("/register_device")
 def register_device(
     device: DeviceRegistration,
-    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -336,9 +336,9 @@ def get_generic_manifest():
             {
                 "chipFamily": "ESP32",
                 "parts": [
-                    {"path": f"{BASE_URL}/firmware/generic/bootloader.bin", "offset": 4096},
-                    {"path": f"{BASE_URL}/firmware/generic/partitions.bin", "offset": 32768},
-                    {"path": f"{BASE_URL}/firmware/generic/firmware.bin", "offset": 65536}
+                    {"path": f"https://balconygreen-production.up.railway.app/firmware/generic/bootloader.bin", "offset": 4096},
+                    {"path": f"https://balconygreen-production.up.railway.app/firmware/generic/partitions.bin", "offset": 32768},
+                    {"path": f"https://balconygreen-production.up.railway.app/firmware/generic/firmware.bin", "offset": 65536}
                 ]
             }
         ]
@@ -516,16 +516,17 @@ def sync_sensors(
             raise HTTPException(status_code=400, detail="No sensors provided")
 
         result = {}
-
+        dev = db.query(Device).filter(
+                Device.device_key == device.device_key
+            ).first()
+        
         for sensor_name in sensors:
             timestamp = datetime.now(timezone.utc)
             # Normalize sensor type
             sensor_name = sensor_name.strip().lower()
 
-            dev = db.query(Device).filter(
-                Device.device_key == device.device_key
-            ).first()
-
+            
+           
             # Check if sensor already exists for this device
             existing = db.query(Sensor).filter(
                 Sensor.device_id == dev.id,

@@ -367,13 +367,18 @@ class BalconyGreenApp:
         st.title("🌿 Basil Plant Health Dashboard")
 
         try:
-            data = requests.get(f"{FASTAPI_URL}/predict/latest", headers=self.headers, timeout=3)
-
-            if data:
+            response = requests.get(f"{FASTAPI_URL}/predict/latest", headers=self.headers, timeout=3)
+            
+            if response.status_code != 200:
+                st.write("No readings for prediction ")
                 
-                # -----------------------------
-                # Extract values
-                # -----------------------------
+            # -----------------------------
+            # Extract values
+            # -----------------------------
+            data = response.json()
+            if data.get("error"," "):
+                st.write(data["error"])
+            else:
                 status = data["status"]
                 trend = data["trend"]
                 health = data["prediction"]["health_score"]
@@ -417,8 +422,7 @@ class BalconyGreenApp:
                 st.caption("Auto-refresh every 10 seconds")
                 time.sleep(5)
                 st.rerun()
-            else:
-                st.write("No readings to predict")
+            
         except Exception as e:
                 st.error(f"Failed to predict: {e}")
     
