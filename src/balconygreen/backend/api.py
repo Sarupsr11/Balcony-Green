@@ -302,7 +302,7 @@ def register_device(
 def serve_file(filename: str):
     file_path = FIRMWARE_DIR / filename
     if not file_path.exists():
-        raise HTTPException(404, f"{filename} not found")
+        raise HTTPException(404, f"{file_path} not found")
     return FileResponse(file_path)
 
 @app.get("/firmware/generic/firmware.bin")
