@@ -91,11 +91,9 @@ def favicon():
 # ======================
 
 
-
-FIRMWARE_DIR = Path("firmware_bins")
+FIRMWARE_DIR = Path("/app/ESP_module/.pio/build/esp32dev")
 IMAGE_DIR = Path("images")
 
-FIRMWARE_DIR.mkdir(exist_ok=True, parents=True)
 IMAGE_DIR.mkdir(exist_ok=True, parents=True)
 
 
@@ -301,31 +299,26 @@ def register_device(
         }
 
 
-
+def serve_file(filename: str):
+    file_path = FIRMWARE_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(404, f"{filename} not found")
+    return FileResponse(file_path)
 
 @app.get("/firmware/generic/firmware.bin")
-def get_generic_firmware():
-    firmware_bins = Path("/app/ESP_module/.pio/build/esp32dev")
-    file_path =  firmware_bins / "firmware.bin"
-    if not file_path.exists():
-        raise HTTPException(404, "Firmware not found")
-    return FileResponse(file_path)
+def firmware():
+    return serve_file("firmware.bin")
+
 
 @app.get("/firmware/generic/bootloader.bin")
-def get_generic_firmware():
-    firmware_bins = Path("/app/ESP_module/.pio/build/esp32dev")
-    file_path =  firmware_bins / "bootloader.bin"
-    if not file_path.exists():
-        raise HTTPException(404, "Firmware not found")
-    return FileResponse(file_path)
+def bootloader():
+    return serve_file("bootloader.bin")
+
 
 @app.get("/firmware/generic/partitions.bin")
-def get_generic_firmware():
-    firmware_bins = Path("/app/ESP_module/.pio/build/esp32dev")
-    file_path =  firmware_bins / "partitions.bin"
-    if not file_path.exists():
-        raise HTTPException(404, "Firmware not found")
-    return FileResponse(file_path)
+def partitions():
+    return serve_file("partitions.bin")
+
 
 
 @app.get("/firmware/generic/manifest.json")
