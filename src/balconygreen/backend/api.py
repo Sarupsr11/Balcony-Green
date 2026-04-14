@@ -725,25 +725,21 @@ def predict_plant_health(
     db: Session = Depends(get_db)
 ):
 
-    # ----------------------------------
-    # 1. Fetch readings (same as before)
-    # ----------------------------------
     readings = (
         db.query(Reading, Sensor)
         .join(Sensor, Reading.sensor_id == Sensor.id)
         .join(Device, Reading.device_id == Device.id)
         .filter(Device.user_id == user.id)
-        .order_by(Reading.timestamp.asc())  # IMPORTANT: ASC for time series
+        .order_by(Reading.timestamp.asc())
         .all()
     )
 
     if not readings:
         return {"error": "No readings found"}
 
-    # ----------------------------------
-    # 2. Convert to DataFrame
-    # ----------------------------------
-    
+    # -----------------------------
+    # DataFrame
+    # -----------------------------
     data = [
         {
             "timestamp": r.timestamp,
@@ -756,7 +752,6 @@ def predict_plant_health(
     df = pd.DataFrame(data)
     df["timestamp"] = pd.to_datetime(df["timestamp"])
 
-    # Pivot → required format
     df = df.pivot_table(
         index="timestamp",
         columns="sensor_name",
@@ -766,24 +761,23 @@ def predict_plant_health(
     df.columns.name = None
 
     df = df.rename(columns={
-        "temperature": "temperature",
-        "humidity": "humidity",
         "soilmoisture": "soil_moisture"
     })
 
     df = df.sort_values("timestamp")
 
-    if len(df) < 20:
+    if len(df) < 25:
         return {"error": "Not enough data for prediction"}
 
-    # ----------------------------------
-    # 3. Apply Basilikum transformation
-    # ----------------------------------
+    # -----------------------------
+    # Transform
+    # -----------------------------
     plant = BasilikumPlant(df)
     df_transformed = plant.basil_df
 
-    
-
+    # -----------------------------
+    # Inference
+    # -----------------------------
     result = run_inference(df=df_transformed)
 
     latest = df_transformed.iloc[-1]
@@ -792,7 +786,7 @@ def predict_plant_health(
         "plant": "basilikum",
 
         # -----------------------------
-        # CURRENT STATE (raw + interpretable)
+        # CURRENT STATE
         # -----------------------------
         "current": {
             "environment": {
@@ -807,18 +801,17 @@ def predict_plant_health(
         },
 
         # -----------------------------
-        # MODEL OUTPUT (future)
+        # MODEL OUTPUT (UPDATED STRUCTURE)
         # -----------------------------
-        "prediction": {
-            "health_score": result["predicted_health_pct"],
-            "risk": result["predicted_risk"],
-            "trend": result["trend"],
-            "status": result["status"],
-            "confidence": result["confidence"]
-        },
+        "prediction": result["prediction"],
+
+        "status": result["status"],
+        "trend": result["trend"],
+
+        "alert": result["alert"],
 
         # -----------------------------
-        # META (useful for debugging/UI)
+        # META
         # -----------------------------
         "meta": {
             "data_points": len(df_transformed),
@@ -827,16 +820,14 @@ def predict_plant_health(
     }
 
 
+
 @app.get("/predict/latest")
 def predict_latest(
-    limit: int = 300,  # adjustable window
+    limit: int = 300,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 
-    # ----------------------------------
-    # 1. Fetch ONLY latest readings
-    # ----------------------------------
     readings = (
         db.query(Reading, Sensor)
         .join(Sensor, Reading.sensor_id == Sensor.id)
@@ -850,9 +841,6 @@ def predict_latest(
     if not readings:
         return {"error": "No readings found"}
 
-    # ----------------------------------
-    # 2. Convert → DataFrame
-    # ----------------------------------
     data = [
         {
             "timestamp": r.timestamp,
@@ -865,7 +853,6 @@ def predict_latest(
     df = pd.DataFrame(data)
     df["timestamp"] = pd.to_datetime(df["timestamp"])
 
-    # Pivot
     df = df.pivot_table(
         index="timestamp",
         columns="sensor_name",
@@ -875,46 +862,27 @@ def predict_latest(
     df.columns.name = None
 
     df = df.rename(columns={
-        "temperature": "temperature",
-        "humidity": "humidity",
-        "soil_moisture": "soil_moisture"
+        "soilmoisture": "soil_moisture"
     })
 
-    # IMPORTANT: reverse back to ASC
     df = df.sort_values("timestamp")
 
-    if len(df) < 20:
+    if len(df) < 25:
         return {"error": "Not enough data for prediction"}
 
-    # ----------------------------------
-    # 3. Transform
-    # ----------------------------------
+    # Transform
     plant = BasilikumPlant(df)
     df_transformed = plant.basil_df
 
-    # ----------------------------------
-    # 4. Inference
-    # ----------------------------------
-
+    # Inference
     result = run_inference(df=df_transformed)
 
     return {
         "mode": "latest",
-
-        # 🔥 What frontend actually needs
         "status": result["status"],
         "trend": result["trend"],
-
-        "prediction": {
-            "health_score": result["predicted_health_pct"],
-            "risk": result["predicted_risk"],
-        },
-
-        # ⚡ Quick signal for alerts
-        "alert": {
-            "level": result["alert_level"],
-            "confidence": result["confidence"]
-        }
+        "prediction": result["prediction"],
+        "alert": result["alert"]
     }
 
 

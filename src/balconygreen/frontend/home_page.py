@@ -367,7 +367,7 @@ class BalconyGreenApp:
         st.title("🌿 Basil Plant Health Dashboard")
 
         try:
-            response = requests.get(f"{FASTAPI_URL}/predict/latest", headers=self.headers, timeout=3)
+            response = requests.get(f"{FASTAPI_URL}/predict/latest", headers=self.headers, timeout=5)
             
             if response.status_code != 200:
                 st.write("No readings for prediction ")
@@ -376,23 +376,37 @@ class BalconyGreenApp:
             # Extract values
             # -----------------------------
             data = response.json()
-            if data.get("error"," "):
-                st.write(data["error"])
-            else:
+
+            if "error" not in data:
+
                 status = data["status"]
                 trend = data["trend"]
-                health = data["prediction"]["health_score"]
+                health = data["prediction"]["health_score"]   # already %
                 risk = data["prediction"]["risk"]
                 alert = data["alert"]["level"]
+
+                # -----------------------------
+                # Normalize risk for UI (0–100)
+                # -----------------------------
+                risk_ui = int((risk + 1) / 2 * 100)
+
+                # -----------------------------
+                # Trend icon
+                # -----------------------------
+                trend_icon = {
+                    "improving": "📈",
+                    "declining": "📉",
+                    "stable": "➖"
+                }.get(trend, "")
 
                 # -----------------------------
                 # Top Metrics
                 # -----------------------------
                 col1, col2, col3 = st.columns(3)
 
-                col1.metric("🌱 Health Score", f"{health:.2f}")
-                col2.metric("📉 Risk Score", f"{risk:.4f}")
-                col3.metric("📊 Trend", trend)
+                col1.metric("🌱 Health Score", f"{health:.1f}%")
+                col2.metric("📉 Risk Score", f"{risk_ui}%")
+                col3.metric("📊 Trend", f"{trend_icon} {trend}")
 
                 # -----------------------------
                 # Status Indicator
@@ -407,21 +421,48 @@ class BalconyGreenApp:
                 # -----------------------------
                 # Alert Level
                 # -----------------------------
-                st.subheader("Alert Level")
-                st.write(f"**{alert.upper()}**")
+                st.subheader("🚨 Alert Level")
+                st.markdown(f"### **{alert.upper()}**")
 
                 # -----------------------------
-                # Simple Gauge (progress bar)
+                # Health Gauge
                 # -----------------------------
-                st.subheader("Health Visualization")
-                st.progress(min(max(int(health), 0), 100))
+                st.subheader("🌿 Health Visualization")
+                st.progress(int(health))
 
                 # -----------------------------
-                # Auto Refresh
+                # Risk Gauge
                 # -----------------------------
-                st.caption("Auto-refresh every 10 seconds")
-                time.sleep(5)
+                st.subheader("⚠️ Risk Visualization")
+                st.progress(risk_ui)
+
+                # -----------------------------
+                # Smart Insights (🔥 NEW)
+                # -----------------------------
+                st.subheader("🧠 Insights")
+
+                if alert == "high_risk":
+                    st.error("Immediate attention needed! Check soil moisture & environment.")
+                elif alert == "moderate_risk":
+                    st.warning("Plant may become unstable soon.")
+                else:
+                    st.success("Plant conditions are stable.")
+
+                # Trend-based insight
+                if trend == "declining":
+                    st.warning("Health is trending downward. Consider intervention.")
+                elif trend == "improving":
+                    st.success("Plant is recovering well.")
+
+                # -----------------------------
+                # Auto Refresh (NON-BLOCKING)
+                # -----------------------------
+                st.caption("Auto-refresh every 15 seconds")
+                time.sleep(15)
                 st.rerun()
+
+            else:
+                st.error(data["error"])
             
         except Exception as e:
                 st.error(f"Failed to predict: {e}")

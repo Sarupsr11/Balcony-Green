@@ -39,14 +39,17 @@ SCALER_STATE = (
 )
 
 
+
 # =====================================================
-# 1. TARGET ENGINEERING (V6)
+# 1. TARGET ENGINEERING (V6 FIXED)
 # =====================================================
 def create_health_targets(df):
     df = df.copy()
 
+    # smoothed health
     df["health_score"] = df["overall_health_on_ext"].ewm(span=5).mean()
 
+    # normalize 0–1
     df["health_score"] = (
         df["health_score"] - df["health_score"].min()
     ) / (df["health_score"].max() - df["health_score"].min() + 1e-8)
@@ -60,7 +63,10 @@ def create_health_targets(df):
     df["future_velocity"] = df["health_velocity"].shift(-horizon)
     df["future_acceleration"] = df["health_acceleration"].shift(-horizon)
 
-    df["risk_score"] = -df["future_acceleration"]
+    # stable risk signal (clipped)
+    df["risk_score"] = (0.5 * (1 - df["future_health"]) +
+    0.3 * abs(df["future_velocity"]) +
+    0.2 * abs(df["future_acceleration"]))
 
     df = df.dropna()
 
@@ -97,7 +103,7 @@ STATE_COLS = [
 
 
 # =====================================================
-# 3. SEQUENCE
+# 3. SEQUENCE CREATION
 # =====================================================
 def create_sequences(df, window=25):
 
@@ -140,27 +146,30 @@ class PlantDataset(Dataset):
 
 
 # =====================================================
-# 5. MODEL
+# 5. MODEL (FIXED OUTPUT RANGE)
 # =====================================================
 class PlantModelV6(nn.Module):
     def __init__(self, sensor_dim, state_dim, hidden=64):
         super().__init__()
 
-        self.sensor_gru = nn.GRU(sensor_dim, hidden, batch_first=True)
-        self.state_gru = nn.GRU(state_dim, hidden, batch_first=True)
+        self.sensor_gru = nn.GRU(sensor_dim, hidden, num_layers=2, batch_first=True, dropout=0.2)
+        self.state_gru = nn.GRU(state_dim, hidden, num_layers=2, batch_first=True, dropout=0.2)
 
         self.attn = nn.Linear(hidden * 2, 1)
 
+        # ✅ FIXED: bounded outputs
         self.health_head = nn.Sequential(
             nn.Linear(hidden * 2, 64),
             nn.ReLU(),
-            nn.Linear(64, 1)
+            nn.Linear(64, 1),
+            nn.Sigmoid()   # 0–1
         )
 
         self.risk_head = nn.Sequential(
             nn.Linear(hidden * 2, 64),
             nn.ReLU(),
-            nn.Linear(64, 1)
+            nn.Linear(64, 1),
+            nn.Tanh()      # -1 to 1
         )
 
     def forward(self, xs, xstate):
@@ -184,8 +193,10 @@ class PlantModelV6(nn.Module):
 # =====================================================
 def run_training(df, window=25, epochs=30, batch_size=32):
 
-    df = create_health_targets(df)
+    # IMPORTANT: correct order
     df = add_features(df)
+    df = create_health_targets(df)
+
     df = df.sort_index().reset_index(drop=True)
 
     Xs, Xstate, yh, yr = create_sequences(df, window)
@@ -240,13 +251,14 @@ def run_training(df, window=25, epochs=30, batch_size=32):
 
             pred_h, pred_r = model(xs, xst)
 
-            loss = loss_h(pred_h, yh_b) + 0.5 * loss_r(pred_r, yr_b)
+            loss = 0.8 * loss_h(pred_h, yh_b) + 1.2 * loss_r(pred_r, yr_b)
 
             loss.backward()
             optimizer.step()
 
             total_loss += loss.item()
 
+        # evaluation
         model.eval()
         ph, th, pr, tr = [], [], [], []
 
@@ -269,7 +281,10 @@ def run_training(df, window=25, epochs=30, batch_size=32):
         mae = mean_absolute_error(th, ph)
         risk_mae = mean_absolute_error(tr, pr)
 
-        print(f"Epoch {epoch+1} | Loss {total_loss:.4f} | RMSE {rmse:.5f} | MAE {mae:.5f} | RiskMAE {risk_mae:.5f}")
+        print(
+            f"Epoch {epoch+1} | Loss {total_loss:.4f} | "
+            f"RMSE {rmse:.5f} | MAE {mae:.5f} | RiskMAE {risk_mae:.5f}"
+        )
 
     return model, scaler_s, scaler_st
 
@@ -298,43 +313,40 @@ model_GRU, scaler_s, scaler_st = load_pipeline()
 
 def run_inference(
     df,
-    model = model_GRU,
-    scaler_s = scaler_s,
-    scaler_st = scaler_st,
+    model=model_GRU,
+    scaler_s=scaler_s,
+    scaler_st=scaler_st,
     window=25
 ):
     """
     Runs inference on plant dataframe.
-
-    Returns:
-        dict with predictions + interpreted signals
+    Returns: dict with predictions + interpreted signals
     """
 
     model.eval()
 
     # -----------------------------
-    # Apply SAME preprocessing
+    # ✅ MATCH TRAINING PIPELINE
     # -----------------------------
-    df = create_health_targets(df)
     df = add_features(df)
+    df = create_health_targets(df)
     df = df.sort_index().reset_index(drop=True)
 
     if len(df) < window:
         raise ValueError(f"Need at least {window} rows, got {len(df)}")
 
     # -----------------------------
-    # Take LAST window
+    # LAST WINDOW
     # -----------------------------
     sensor = df[SENSOR_COLS].values[-window:]
     state = df[STATE_COLS].values[-window:]
 
     # -----------------------------
-    # Scale (CRITICAL)
+    # SCALING
     # -----------------------------
     sensor = scaler_s.transform(sensor)
     state = scaler_st.transform(state)
 
-    # Convert to tensor
     sensor = torch.tensor(sensor[np.newaxis, :, :], dtype=torch.float32)
     state = torch.tensor(state[np.newaxis, :, :], dtype=torch.float32)
 
@@ -344,16 +356,22 @@ def run_inference(
     with torch.no_grad():
         pred_health, pred_risk = model(sensor, state)
 
-    pred_health = pred_health.item()
-    pred_risk = pred_risk.item()
+    pred_health = float(pred_health.item())
+    pred_risk = float(pred_risk.item())
 
     # -----------------------------
-    # DERIVED INTELLIGENCE
+    # ✅ SAFETY CLIPPING
     # -----------------------------
-    latest_health = df["health_score"].iloc[-1]
+    pred_health = float(np.clip(pred_health, 0, 1))
+    pred_risk = float(np.clip(pred_risk, -1, 1))
 
-    # Trend
+    latest_health = float(df["health_score"].iloc[-1])
+
+    # -----------------------------
+    # ✅ TREND (MORE SENSITIVE)
+    # -----------------------------
     delta = pred_health - latest_health
+
     if delta > 0.02:
         trend = "improving"
     elif delta < -0.02:
@@ -361,33 +379,64 @@ def run_inference(
     else:
         trend = "stable"
 
-    # Risk interpretation
-    if pred_risk > 0.02:
+    # -----------------------------
+    # ✅ SANITY GUARD
+    # Prevent "improving but dead"
+    # -----------------------------
+    if pred_health < 0.05 and trend == "improving":
+        trend = "stable"
+
+    # -----------------------------
+    # ✅ RISK INTERPRETATION
+    # -----------------------------
+    if pred_risk > 0.5:
         alert = "high_risk"
-    elif pred_risk > 0.005:
+    elif pred_risk > 0.2:
         alert = "moderate_risk"
     else:
         alert = "low_risk"
 
-    # Combined status
-    if trend == "declining" and alert == "high_risk":
+    # -----------------------------
+    # ✅ STATUS (CRITICAL FIX)
+    # -----------------------------
+    if pred_health < 0.2:
         status = "critical"
+    elif pred_health < 0.4:
+        status = "warning"
+    elif alert == "high_risk":
+        status = "warning"
     elif trend == "declining":
         status = "warning"
     else:
         status = "healthy"
 
-    # Confidence
-    confidence = abs(delta)
+    # -----------------------------
+    # ✅ CONFIDENCE (STABLE)
+    # -----------------------------
+    confidence = float(np.clip(1 - abs(delta) * 2, 0, 1))
 
+    # -----------------------------
+    # FINAL OUTPUT
+    # -----------------------------
     return {
-        "predicted_health": float(pred_health),
-        "predicted_health_pct": float(pred_health * 100),
-        "predicted_risk": float(pred_risk),
-        "current_health": float(latest_health),
-        "current_health_pct": float(latest_health * 100),
-        "trend": trend,
-        "alert_level": alert,
+        "mode": "latest",
+
         "status": status,
-        "confidence": float(confidence)
+        "trend": trend,
+
+        "prediction": {
+            "health_score": pred_health,
+            "health_pct": pred_health * 100,
+            "risk": pred_risk
+        },
+
+        "current": {
+            "health_score": latest_health,
+            "health_pct": latest_health * 100
+        },
+
+        "alert": {
+            "level": alert,
+            "confidence": confidence
+        }
     }
