@@ -91,7 +91,7 @@ def favicon():
 # ======================
 
 
-FIRMWARE_DIR = Path("/app/balconygreen/ESP_module/.pio/build/esp32dev")
+FIRMWARE_DIR = Path("/app/balconygreen/firmware_bins/generic")
 IMAGE_DIR = Path("images")
 
 IMAGE_DIR.mkdir(exist_ok=True, parents=True)
