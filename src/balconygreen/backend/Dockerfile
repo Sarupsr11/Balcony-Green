@@ -44,7 +44,6 @@ RUN pip install --upgrade pip && \
 # Copy backend source code
 # --------------------------------------------------
 COPY src/balconygreen ./balconygreen
-COPY ESP_module ./ESP_module
 
 # 👉 Optional firmware files
 # COPY firmware_bins ./firmware_bins
