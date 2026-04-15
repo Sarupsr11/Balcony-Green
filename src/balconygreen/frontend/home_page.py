@@ -381,14 +381,14 @@ class BalconyGreenApp:
 
                 status = data["status"]
                 trend = data["trend"]
-                health = data["prediction"]["health_score"]   # already %
+                health = data["prediction"]["health_pct"]   # already %
                 risk = data["prediction"]["risk"]
                 alert = data["alert"]["level"]
 
                 # -----------------------------
                 # Normalize risk for UI (0–100)
                 # -----------------------------
-                risk_ui = int((risk + 1) / 2 * 100)
+                risk_ui = risk* 100
 
                 # -----------------------------
                 # Trend icon
@@ -405,7 +405,7 @@ class BalconyGreenApp:
                 col1, col2, col3 = st.columns(3)
 
                 col1.metric("🌱 Health Score", f"{health:.1f}%")
-                col2.metric("📉 Risk Score", f"{risk_ui}%")
+                col2.metric("📉 Risk Score", f"{risk_ui:.6f}%")
                 col3.metric("📊 Trend", f"{trend_icon} {trend}")
 
                 # -----------------------------

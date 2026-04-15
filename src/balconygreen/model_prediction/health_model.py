@@ -332,7 +332,7 @@ def run_inference(
     df = create_health_targets(df)
     df = df.sort_index().reset_index(drop=True)
 
-    print(df['overall_health_on_ext'])
+    
 
     if len(df) < window:
         raise ValueError(f"Need at least {window} rows, got {len(df)}")
@@ -358,19 +358,13 @@ def run_inference(
     with torch.no_grad():
         pred_health, pred_risk = model(sensor, state)
 
-    pred_health = float(pred_health.item())*100
+    
+    pred_health = float(pred_health.item())  # 0–1
     pred_risk = float(pred_risk.item())
 
-    
-    
-    
+    latest_health = float(df["health_score"].iloc[-1]) / 100  # normalize
 
-    latest_health = float(df["health_score"].iloc[-1])
-    
-
-    # -----------------------------
-    # ✅ TREND (MORE SENSITIVE)
-    # -----------------------------
+    # trend
     delta = pred_health - latest_health
 
     if delta > 0.02:
@@ -380,30 +374,20 @@ def run_inference(
     else:
         trend = "stable"
 
-    # -----------------------------
-    # ✅ SANITY GUARD
-    # Prevent "improving but dead"
-    # -----------------------------
-    if pred_health < 0.05 and trend == "improving":
-        trend = "stable"
-
-    # -----------------------------
-    # ✅ RISK INTERPRETATION
-    # -----------------------------
-    if pred_risk > 0.5:
+    # risk
+    risk_score = abs(pred_risk)
+    
+    
+    if risk_score > 0.3:
         alert = "high_risk"
-    elif pred_risk > 0.2:
+    elif risk_score > 0.1:
         alert = "moderate_risk"
     else:
         alert = "low_risk"
 
-    # -----------------------------
-    # ✅ STATUS (CRITICAL FIX)
-    # -----------------------------
+    # status
     if pred_health < 0.2:
         status = "critical"
-    elif pred_health < 0.4:
-        status = "warning"
     elif alert == "high_risk":
         status = "warning"
     elif trend == "declining":
@@ -411,10 +395,7 @@ def run_inference(
     else:
         status = "healthy"
 
-    # -----------------------------
-    # ✅ CONFIDENCE (STABLE)
-    # -----------------------------
-    confidence = float(np.clip(1 - abs(delta) * 2, 0, 1))
+    confidence = float(np.clip(1 - abs(delta), 0, 1))
 
     # -----------------------------
     # FINAL OUTPUT
@@ -428,7 +409,7 @@ def run_inference(
         "prediction": {
             "health_score": pred_health,
             "health_pct": pred_health * 100,
-            "risk": pred_risk
+            "risk": risk_score
         },
 
         "current": {
