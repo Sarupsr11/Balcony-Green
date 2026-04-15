@@ -717,6 +717,42 @@ async def upload_camera_image(
 
 
 
+def build_sensor_dataframe(readings):
+    data = [
+        {
+            "timestamp": r.timestamp,
+            "sensor_name": s.sensor_name,
+            "value": r.value
+        }
+        for r, s in readings
+    ]
+
+    df = pd.DataFrame(data)
+
+    # --- normalize timestamp (fix async IoT issue) ---
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df["timestamp"] = df["timestamp"].dt.floor("1min")
+
+    # --- normalize sensor names ---
+    df["sensor_name"] = df["sensor_name"].str.strip().str.lower()
+
+    # --- pivot safely ---
+    df = df.pivot_table(
+        index="timestamp",
+        columns="sensor_name",
+        values="value",
+        aggfunc="mean"
+    )
+    print(df)
+
+    # --- fix NaNs safely (IMPORTANT for ML) ---
+    df = df.sort_index()
+    df = df.interpolate(method="time").ffill().bfill()
+
+    return df.reset_index()
+
+
+
 
 
 @app.get("/predict")
@@ -738,31 +774,11 @@ def predict_plant_health(
         return {"error": "No readings found"}
 
     # -----------------------------
-    # DataFrame
+    # SAFE DATAFRAME BUILD
     # -----------------------------
-    data = [
-        {
-            "timestamp": r.timestamp,
-            "sensor_name": s.sensor_name,
-            "value": r.value
-        }
-        for r, s in readings
-    ]
+    df = build_sensor_dataframe(readings)
 
-    df = pd.DataFrame(data)
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
-
-    df = df.pivot_table(
-        index="timestamp",
-        columns="sensor_name",
-        values="value"
-    ).reset_index()
-
-    df.columns.name = None
-
-    df = df.rename(columns={
-        "soilmoisture": "soil_moisture"
-    })
+    
 
     df = df.sort_values("timestamp")
 
@@ -770,13 +786,16 @@ def predict_plant_health(
         return {"error": "Not enough data for prediction"}
 
     # -----------------------------
-    # Transform
+    # TRANSFORM
     # -----------------------------
     plant = BasilikumPlant(df)
     df_transformed = plant.basil_df
 
+    if df_transformed is None or len(df_transformed) == 0:
+        return {"error": "Empty after transformation"}
+
     # -----------------------------
-    # Inference
+    # INFERENCE
     # -----------------------------
     result = run_inference(df=df_transformed)
 
@@ -785,34 +804,23 @@ def predict_plant_health(
     return {
         "plant": "basilikum",
 
-        # -----------------------------
-        # CURRENT STATE
-        # -----------------------------
         "current": {
             "environment": {
-                "temperature": float(latest["temperature"]),
-                "humidity": float(latest["humidity"]),
-                "soil_moisture": float(latest["soil_moisture"]),
+                "temperature": float(latest.get("temperature", 0)),
+                "humidity": float(latest.get("humidity", 0)),
+                "soil_moisture": float(latest.get("soil_moisture", 0)),
             },
             "health": {
-                "score": float(latest["overall_health_on_ext"]),
-                "label": latest["health_based_on_opt"]
+                "score": float(latest.get("overall_health_on_ext", 0)),
+                "label": latest.get("health_based_on_opt", "unknown")
             }
         },
 
-        # -----------------------------
-        # MODEL OUTPUT (UPDATED STRUCTURE)
-        # -----------------------------
         "prediction": result["prediction"],
-
         "status": result["status"],
         "trend": result["trend"],
-
         "alert": result["alert"],
 
-        # -----------------------------
-        # META
-        # -----------------------------
         "meta": {
             "data_points": len(df_transformed),
             "window_used": 25
@@ -841,40 +849,30 @@ def predict_latest(
     if not readings:
         return {"error": "No readings found"}
 
-    data = [
-        {
-            "timestamp": r.timestamp,
-            "sensor_name": s.sensor_name,
-            "value": r.value
-        }
-        for r, s in readings
-    ]
+    # -----------------------------
+    # SAFE DATAFRAME BUILD
+    # -----------------------------
+    df = build_sensor_dataframe(readings)
 
-    df = pd.DataFrame(data)
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
-
-    df = df.pivot_table(
-        index="timestamp",
-        columns="sensor_name",
-        values="value"
-    ).reset_index()
-
-    df.columns.name = None
-
-    df = df.rename(columns={
-        "soilmoisture": "soil_moisture"
-    })
+    
 
     df = df.sort_values("timestamp")
 
     if len(df) < 25:
         return {"error": "Not enough data for prediction"}
 
-    # Transform
+    # -----------------------------
+    # TRANSFORM
+    # -----------------------------
     plant = BasilikumPlant(df)
     df_transformed = plant.basil_df
 
-    # Inference
+    if df_transformed is None or len(df_transformed) == 0:
+        return {"error": "Empty after transformation"}
+
+    # -----------------------------
+    # INFERENCE
+    # -----------------------------
     result = run_inference(df=df_transformed)
 
     return {
@@ -884,7 +882,6 @@ def predict_latest(
         "prediction": result["prediction"],
         "alert": result["alert"]
     }
-
 
 @app.get("/")
 def root():
