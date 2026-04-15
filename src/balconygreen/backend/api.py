@@ -743,7 +743,6 @@ def build_sensor_dataframe(readings):
         values="value",
         aggfunc="mean"
     )
-    print(df)
 
     # --- fix NaNs safely (IMPORTANT for ML) ---
     df = df.sort_index()

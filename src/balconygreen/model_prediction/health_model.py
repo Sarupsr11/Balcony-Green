@@ -49,10 +49,10 @@ def create_health_targets(df):
     # smoothed health
     df["health_score"] = df["overall_health_on_ext"].ewm(span=5).mean()
 
-    # normalize 0–1
-    df["health_score"] = (
-        df["health_score"] - df["health_score"].min()
-    ) / (df["health_score"].max() - df["health_score"].min() + 1e-8)
+    # # normalize 0–1
+    # df["health_score"] = (
+    #     df["health_score"] - df["health_score"].min()
+    # ) / (df["health_score"].max() - df["health_score"].min() + 1e-8)
 
     df["health_velocity"] = df["health_score"].diff().fillna(0)
     df["health_acceleration"] = df["health_velocity"].diff().fillna(0)
@@ -64,9 +64,9 @@ def create_health_targets(df):
     df["future_acceleration"] = df["health_acceleration"].shift(-horizon)
 
     # stable risk signal (clipped)
-    df["risk_score"] = (0.5 * (1 - df["future_health"]) +
-    0.3 * abs(df["future_velocity"]) +
-    0.2 * abs(df["future_acceleration"]))
+    df["risk_score"] = (0.5 * (1 - df["future_health"]/100) +
+    0.3 * abs(df["future_velocity"]/100) +
+    0.2 * abs(df["future_acceleration"])/100)
 
     df = df.dropna()
 
@@ -332,6 +332,8 @@ def run_inference(
     df = create_health_targets(df)
     df = df.sort_index().reset_index(drop=True)
 
+    print(df['overall_health_on_ext'])
+
     if len(df) < window:
         raise ValueError(f"Need at least {window} rows, got {len(df)}")
 
@@ -356,16 +358,15 @@ def run_inference(
     with torch.no_grad():
         pred_health, pred_risk = model(sensor, state)
 
-    pred_health = float(pred_health.item())
+    pred_health = float(pred_health.item())*100
     pred_risk = float(pred_risk.item())
 
-    # -----------------------------
-    # ✅ SAFETY CLIPPING
-    # -----------------------------
-    pred_health = float(np.clip(pred_health, 0, 1))
-    pred_risk = float(np.clip(pred_risk, -1, 1))
+    
+    
+    
 
     latest_health = float(df["health_score"].iloc[-1])
+    
 
     # -----------------------------
     # ✅ TREND (MORE SENSITIVE)
