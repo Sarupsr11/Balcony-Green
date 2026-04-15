@@ -434,7 +434,7 @@ class BalconyGreenApp:
                 # Risk Gauge
                 # -----------------------------
                 st.subheader("⚠️ Risk Visualization")
-                st.progress(risk_ui)
+                st.progress(int(risk_ui))
 
                 # -----------------------------
                 # Smart Insights (🔥 NEW)
