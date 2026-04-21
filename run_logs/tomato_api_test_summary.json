@@ -1,0 +1,75 @@
+{
+  "email": "tomato_test_1776021872@example.com",
+  "signup_status": 200,
+  "signup_body": "{\"message\":\"User created\"}",
+  "login_status": 200,
+  "login_body": "{\"access_token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1OTM0ODcxMS0yMWE1LTQyYzktODU1OC0yN2EwNDAxYzJlYTQiLCJleHAiOjE3NzYwMjU0NzJ9.B8s1wmrW1eInj9NsnA1Ie5IciXAq8IrQn8apQGL6jR0\",\"token_type\":\"Bearer\"}",
+  "device_id": "esp32-tomato-1",
+  "register_sensors": [
+    {
+      "sensor": "temperature",
+      "status": 200
+    },
+    {
+      "sensor": "humidity",
+      "status": 200
+    },
+    {
+      "sensor": "soil_moisture",
+      "status": 200
+    },
+    {
+      "sensor": "light",
+      "status": 200
+    },
+    {
+      "sensor": "soil_raw",
+      "status": 200
+    },
+    {
+      "sensor": "camera",
+      "status": 200
+    }
+  ],
+  "sensor_posts": [
+    {
+      "sensor": "temperature",
+      "status": 200
+    },
+    {
+      "sensor": "humidity",
+      "status": 200
+    },
+    {
+      "sensor": "soil_moisture",
+      "status": 200
+    },
+    {
+      "sensor": "soil_raw",
+      "status": 200
+    },
+    {
+      "sensor": "light",
+      "status": 200
+    }
+  ],
+  "calibration_status": 200,
+  "calibration_body": {
+    "status": "saved",
+    "calibration": {
+      "id": "f9b33fff-4e58-4bb4-81b6-e86aff038e21",
+      "device_id": "esp32-tomato-1",
+      "plant_type": "tomato_indoor",
+      "soil_raw_dry": 3200,
+      "soil_raw_wet": 1200,
+      "moisture_target_pct": 68.0,
+      "pump_flow_ml_per_sec": 22.0,
+      "failure_min_rise_pct": 2.5,
+      "failure_window_minutes": 45,
+      "notes": "Automated tomato test",
+      "created_at": "2026-04-12 19:24:33"
+    }
+  },
+  "readings_status": 200,
+  "readings_count": 5
+}

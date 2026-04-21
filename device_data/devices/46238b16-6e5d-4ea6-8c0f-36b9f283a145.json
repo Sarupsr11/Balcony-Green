@@ -1,0 +1,10 @@
+{
+  "device_id": "46238b16-6e5d-4ea6-8c0f-36b9f283a145",
+  "device_key": "4af7cad4-aa92-422d-adc1-33da6724e8ab",
+  "firmware": {
+    "bin_url": "http://10.66.165.182:8000/firmware/generic/firmware.bin",
+    "manifest_url": "http://10.66.165.182:8000/firmware/generic/manifest.json"
+  },
+  "wifi_ssid": "Redmi 10 Power",
+  "wifi_password": "Sar12345"
+}
