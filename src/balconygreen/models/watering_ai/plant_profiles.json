@@ -1,0 +1,100 @@
+{
+  "basilikum": {
+    "key": "basilikum",
+    "display_name": "Basilikum",
+    "source": "learned_from_pdf",
+    "moisture_threshold_pct": 74.5,
+    "target_moisture_pct": 85.0,
+    "stop_watering_pct": 85.0,
+    "temperature_pivot_c": 19.0,
+    "humidity_pivot_pct": 86.0,
+    "light_reference_lux": 12000,
+    "weather_temp_weight": 0.45,
+    "weather_humidity_weight": -0.08,
+    "light_weight_per_10k_lux": 0.9,
+    "rain_weight_per_mm": -1.25,
+    "score_trigger": 1.0,
+    "score_hysteresis": 0.35,
+    "watering_ms_per_pct": 220,
+    "min_pump_ms": 800,
+    "max_pump_ms": 8000,
+    "notes": [
+      "Learned from the basilikum PDF in this folder.",
+      "Best profile in this project because it is based on your real watering history."
+    ]
+  },
+  "tomato_indoor": {
+    "key": "tomato_indoor",
+    "display_name": "Tomato Indoor Pot",
+    "source": "starter_preset",
+    "moisture_threshold_pct": 68.0,
+    "target_moisture_pct": 80.0,
+    "stop_watering_pct": 82.0,
+    "temperature_pivot_c": 22.0,
+    "humidity_pivot_pct": 65.0,
+    "light_reference_lux": 18000,
+    "weather_temp_weight": 0.55,
+    "weather_humidity_weight": -0.05,
+    "light_weight_per_10k_lux": 1.1,
+    "rain_weight_per_mm": -1.4,
+    "score_trigger": 1.0,
+    "score_hysteresis": 0.35,
+    "watering_ms_per_pct": 260,
+    "min_pump_ms": 1000,
+    "max_pump_ms": 9000,
+    "notes": [
+      "Starter profile for potted indoor tomatoes.",
+      "Tomatoes usually need stronger light and steadier moisture than generic foliage plants.",
+      "Tune this after logging real tomato sensor data."
+    ]
+  },
+  "houseplant_generic": {
+    "key": "houseplant_generic",
+    "display_name": "Generic Houseplant",
+    "source": "starter_preset",
+    "moisture_threshold_pct": 55.0,
+    "target_moisture_pct": 68.0,
+    "stop_watering_pct": 70.0,
+    "temperature_pivot_c": 21.0,
+    "humidity_pivot_pct": 50.0,
+    "light_reference_lux": 8000,
+    "weather_temp_weight": 0.3,
+    "weather_humidity_weight": -0.05,
+    "light_weight_per_10k_lux": 0.55,
+    "rain_weight_per_mm": -0.8,
+    "score_trigger": 1.0,
+    "score_hysteresis": 0.3,
+    "watering_ms_per_pct": 180,
+    "min_pump_ms": 700,
+    "max_pump_ms": 7000,
+    "notes": [
+      "Good default for common indoor foliage plants.",
+      "Less aggressive than basil and tomato.",
+      "Use this when you do not have a plant-specific profile yet."
+    ]
+  },
+  "succulent_cactus": {
+    "key": "succulent_cactus",
+    "display_name": "Succulent / Cactus",
+    "source": "starter_preset",
+    "moisture_threshold_pct": 28.0,
+    "target_moisture_pct": 40.0,
+    "stop_watering_pct": 45.0,
+    "temperature_pivot_c": 22.0,
+    "humidity_pivot_pct": 40.0,
+    "light_reference_lux": 14000,
+    "weather_temp_weight": 0.18,
+    "weather_humidity_weight": -0.03,
+    "light_weight_per_10k_lux": 0.35,
+    "rain_weight_per_mm": -0.5,
+    "score_trigger": 1.2,
+    "score_hysteresis": 0.45,
+    "watering_ms_per_pct": 120,
+    "min_pump_ms": 500,
+    "max_pump_ms": 4000,
+    "notes": [
+      "Dry-tolerant preset for low-water indoor plants.",
+      "Included because many houseplant setups need a safer low-water option."
+    ]
+  }
+}

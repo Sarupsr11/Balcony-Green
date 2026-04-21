@@ -1,0 +1,12 @@
+services:
+  api:
+    volumes:
+      - ../..:/app
+    environment:
+      PYTHONPATH: /app/src
+
+  frontend:
+    volumes:
+      - ../..:/app
+    environment:
+      PYTHONPATH: /app/src

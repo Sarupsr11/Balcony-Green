@@ -1,0 +1,27 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: src/balconygreen/Dockerfile
+    command: ["uvicorn", "balconygreen.auth_api:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      PYTHONPATH: /app/src
+      BALCONYGREEN_DB_PATH: /app/balcony.db
+      BALCONYGREEN_JWT_SECRET: balconygreen-demo-secret
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: src/balconygreen/Dockerfile
+    command: ["streamlit", "run", "src/balconygreen/app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
+    depends_on:
+      - api
+    environment:
+      PYTHONPATH: /app/src
+      BALCONYGREEN_API_URL: http://api:8000
+      BALCONYGREEN_COOKIE_PASSWORD: balconygreen-demo-cookie
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
+    ports:
+      - "8501:8501"

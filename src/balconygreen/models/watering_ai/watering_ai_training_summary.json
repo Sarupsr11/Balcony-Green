@@ -1,0 +1,236 @@
+{
+  "generated_at": "2026-03-28T17:47:12.677851+00:00",
+  "source_dataset": "basilikum_watering_data.csv",
+  "notes": [
+    "Light and weather features are engineered from the basil time series because the original PDF did not include those columns.",
+    "Disease score support is included through controlled augmentation so the model interface can consume disease stress during inference.",
+    "The watering model is evaluated on the last 20% of the time series to keep the test split chronological."
+  ],
+  "metrics": {
+    "rows_total": 1101,
+    "rows_train": 914,
+    "rows_fit": 776,
+    "rows_calibration": 138,
+    "rows_test": 187,
+    "decision_threshold": 0.2,
+    "positive_rate_test": 0.0321,
+    "classification": {
+      "accuracy": 0.9733,
+      "precision": 0.6667,
+      "recall": 0.3333,
+      "f1": 0.4444
+    },
+    "regression": {
+      "mae_all_ms": 30.25,
+      "mae_positive_only_ms": 754.47
+    },
+    "top_feature_importance": [
+      {
+        "feature": "soil_raw",
+        "importance": 0.2833
+      },
+      {
+        "feature": "soil_moisture_pct",
+        "importance": 0.2317
+      },
+      {
+        "feature": "moisture_2h_delta",
+        "importance": 0.1215
+      },
+      {
+        "feature": "moisture_1h_delta",
+        "importance": 0.091
+      },
+      {
+        "feature": "raw_1h_delta",
+        "importance": 0.0635
+      },
+      {
+        "feature": "weather_humidity_pct",
+        "importance": 0.0493
+      },
+      {
+        "feature": "humidity_pct",
+        "importance": 0.0466
+      },
+      {
+        "feature": "hour_cos",
+        "importance": 0.0227
+      },
+      {
+        "feature": "temperature_c",
+        "importance": 0.0162
+      },
+      {
+        "feature": "soil_raw_delta",
+        "importance": 0.0159
+      }
+    ],
+    "feature_columns": [
+      "temperature_c",
+      "humidity_pct",
+      "soil_raw",
+      "soil_moisture_pct",
+      "minutes_since_prev",
+      "soil_moisture_delta",
+      "soil_raw_delta",
+      "moisture_1h_delta",
+      "raw_1h_delta",
+      "moisture_2h_delta",
+      "hour_sin",
+      "hour_cos",
+      "light_lux",
+      "weather_temp_c",
+      "weather_humidity_pct",
+      "forecast_rain_mm",
+      "disease_score",
+      "disease_confidence"
+    ],
+    "sample_predictions": [
+      {
+        "timestamp": "2026-03-09 15:02:14",
+        "soil_moisture_pct": 85,
+        "light_lux": 7354.9,
+        "weather_temp_c": 19.73,
+        "forecast_rain_mm": 0.0,
+        "disease_score": 0.0,
+        "should_water": 0,
+        "pump_ms_target": 0,
+        "pred_should_water": 0,
+        "pred_pump_ms": 2
+      },
+      {
+        "timestamp": "2026-03-09 15:17:19",
+        "soil_moisture_pct": 74,
+        "light_lux": 6632.2,
+        "weather_temp_c": 19.79,
+        "forecast_rain_mm": 0.0,
+        "disease_score": 0.0,
+        "should_water": 1,
+        "pump_ms_target": 2420,
+        "pred_should_water": 1,
+        "pred_pump_ms": 599
+      },
+      {
+        "timestamp": "2026-03-09 15:32:26",
+        "soil_moisture_pct": 85,
+        "light_lux": 6197.3,
+        "weather_temp_c": 19.76,
+        "forecast_rain_mm": 0.0,
+        "disease_score": 0.0,
+        "should_water": 0,
+        "pump_ms_target": 0,
+        "pred_should_water": 0,
+        "pred_pump_ms": 2
+      },
+      {
+        "timestamp": "2026-03-09 15:47:30",
+        "soil_moisture_pct": 85,
+        "light_lux": 5934.9,
+        "weather_temp_c": 20.13,
+        "forecast_rain_mm": 0.0,
+        "disease_score": 0.0,
+        "should_water": 0,
+        "pump_ms_target": 0,
+        "pred_should_water": 0,
+        "pred_pump_ms": 2
+      },
+      {
+        "timestamp": "2026-03-09 16:17:38",
+        "soil_moisture_pct": 85,
+        "light_lux": 5002.2,
+        "weather_temp_c": 20.78,
+        "forecast_rain_mm": 0.0,
+        "disease_score": 0.0,
+        "should_water": 0,
+        "pump_ms_target": 0,
+        "pred_should_water": 0,
+        "pred_pump_ms": 2
+      },
+      {
+        "timestamp": "2026-03-09 16:32:43",
+        "soil_moisture_pct": 85,
+        "light_lux": 4505.2,
+        "weather_temp_c": 20.96,
+        "forecast_rain_mm": 0.0,
+        "disease_score": 0.0,
+        "should_water": 0,
+        "pump_ms_target": 0,
+        "pred_should_water": 0,
+        "pred_pump_ms": 2
+      },
+      {
+        "timestamp": "2026-03-09 16:47:47",
+        "soil_moisture_pct": 75,
+        "light_lux": 4074.8,
+        "weather_temp_c": 20.74,
+        "forecast_rain_mm": 0.0,
+        "disease_score": 0.0,
+        "should_water": 0,
+        "pump_ms_target": 0,
+        "pred_should_water": 1,
+        "pred_pump_ms": 519
+      },
+      {
+        "timestamp": "2026-03-09 17:02:50",
+        "soil_moisture_pct": 85,
+        "light_lux": 3621.4,
+        "weather_temp_c": 20.63,
+        "forecast_rain_mm": 0.0,
+        "disease_score": 0.0,
+        "should_water": 0,
+        "pump_ms_target": 0,
+        "pred_should_water": 0,
+        "pred_pump_ms": 0
+      },
+      {
+        "timestamp": "2026-03-09 17:17:55",
+        "soil_moisture_pct": 85,
+        "light_lux": 3150.9,
+        "weather_temp_c": 20.61,
+        "forecast_rain_mm": 0.0,
+        "disease_score": 0.0,
+        "should_water": 0,
+        "pump_ms_target": 0,
+        "pred_should_water": 0,
+        "pred_pump_ms": 2
+      },
+      {
+        "timestamp": "2026-03-09 17:32:59",
+        "soil_moisture_pct": 85,
+        "light_lux": 2659.3,
+        "weather_temp_c": 20.71,
+        "forecast_rain_mm": 0.0,
+        "disease_score": 0.0,
+        "should_water": 0,
+        "pump_ms_target": 0,
+        "pred_should_water": 0,
+        "pred_pump_ms": 0
+      },
+      {
+        "timestamp": "2026-03-09 17:48:06",
+        "soil_moisture_pct": 85,
+        "light_lux": 2198.6,
+        "weather_temp_c": 20.8,
+        "forecast_rain_mm": 0.0,
+        "disease_score": 0.0,
+        "should_water": 0,
+        "pump_ms_target": 0,
+        "pred_should_water": 0,
+        "pred_pump_ms": 0
+      },
+      {
+        "timestamp": "2026-03-09 18:03:11",
+        "soil_moisture_pct": 85,
+        "light_lux": 1800.0,
+        "weather_temp_c": 21.0,
+        "forecast_rain_mm": 0.0,
+        "disease_score": 0.0,
+        "should_water": 0,
+        "pump_ms_target": 0,
+        "pred_should_water": 0,
+        "pred_pump_ms": 0
+      }
+    ]
+  }
+}
